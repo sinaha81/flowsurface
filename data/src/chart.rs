@@ -1,3 +1,4 @@
+// ماژول‌های مربوط به اجزای مختلف نمودار
 pub mod comparison;
 pub mod heatmap;
 pub mod indicator;
@@ -13,12 +14,14 @@ use super::aggr::{
 };
 pub use kline::KlineChartKind;
 
+/// انواع داده‌های قابل نمایش در نمودار
 pub enum PlotData<D: DataPoint> {
-    TimeBased(TimeSeries<D>),
-    TickBased(TickAggr),
+    TimeBased(TimeSeries<D>), // داده‌های مبتنی بر زمان
+    TickBased(TickAggr),      // داده‌های مبتنی بر تعداد تیک
 }
 
 impl<D: DataPoint> PlotData<D> {
+    /// محاسبه نقطه میانی آخرین قیمت برای نمایش در محور Y
     pub fn latest_y_midpoint(&self, calculate_target_y: impl Fn(exchange::Kline) -> f32) -> f32 {
         match self {
             PlotData::TimeBased(timeseries) => timeseries
@@ -30,6 +33,7 @@ impl<D: DataPoint> PlotData<D> {
         }
     }
 
+    /// محاسبه محدوده قیمت قابل مشاهده در یک بازه مشخص
     pub fn visible_price_range(
         &self,
         start_interval: u64,
@@ -46,28 +50,28 @@ impl<D: DataPoint> PlotData<D> {
     }
 }
 
+/// تنظیمات نمایشی نمودار
 #[derive(Debug, Clone, Deserialize, Serialize, Default)]
 pub struct ViewConfig {
-    pub splits: Vec<f32>,
-    pub autoscale: Option<Autoscale>,
+    pub splits: Vec<f32>,           // تقسیم‌بندی‌های نمودار
+    pub autoscale: Option<Autoscale>, // تنظیمات مقیاس‌دهی خودکار
 }
 
+/// حالت‌های مختلف مقیاس‌دهی خودکار (Autoscale)
 #[derive(Debug, Clone, Copy, Deserialize, Serialize, Default, PartialEq)]
 pub enum Autoscale {
     #[default]
-    CenterLatest,
-    FitToVisible,
+    CenterLatest, // متمرکز کردن آخرین قیمت
+    FitToVisible, // برازش بر اساس داده‌های قابل مشاهده
 }
 
-/// Defines how chart data is aggregated and displayed along the x-axis.
+/// تعیین می‌کند که داده‌های نمودار چگونه در محور افقی (X) تجمیع و نمایش داده شوند
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
 pub enum Basis {
-    /// Time-based aggregation where each datapoint represents a fixed time interval.
+    /// تجمیع مبتنی بر زمان که در آن هر نقطه داده نشان‌دهنده یک بازه زمانی ثابت است
     Time(exchange::Timeframe),
 
-    /// Trade-based aggregation where each datapoint represents a fixed number of trades.
-    ///
-    /// The u16 value represents the number of trades per aggregation unit.
+    /// تجمیع مبتنی بر معامله که در آن هر نقطه داده نشان‌دهنده تعداد مشخصی معامله (تیک) است
     Tick(aggr::TickCount),
 }
 
@@ -107,8 +111,9 @@ impl From<exchange::Timeframe> for Basis {
     }
 }
 
+/// انواع مطالعات یا اندیکاتورهای قابل اضافه شدن به نمودار
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub enum Study {
-    Heatmap(Vec<heatmap::HeatmapStudy>),
-    Footprint(Vec<kline::FootprintStudy>),
+    Heatmap(Vec<heatmap::HeatmapStudy>),   // نقشه حرارتی (Heatmap)
+    Footprint(Vec<kline::FootprintStudy>), // نمودار فوت‌پرینت (Footprint)
 }

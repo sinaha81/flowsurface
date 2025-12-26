@@ -14,12 +14,13 @@ use std::{
 const TRADE_RETENTION_MS: u64 = 8 * 60_000;
 const CHASE_MIN_VISIBLE_OPACITY: f32 = 0.15;
 
+/// تنظیمات مربوط به نردبان قیمت (Ladder/DOM)
 #[derive(Debug, Clone, Copy, PartialEq, Deserialize, Serialize)]
 pub struct Config {
-    pub show_spread: bool,
+    pub show_spread: bool,          // نمایش فاصله خرید و فروش (Spread)
     #[serde(deserialize_with = "ok_or_default", default)]
-    pub show_chase_tracker: bool,
-    pub trade_retention: Duration,
+    pub show_chase_tracker: bool,   // نمایش ردیاب تعقیب قیمت (Chase Tracker)
+    pub trade_retention: Duration,  // مدت زمان نگهداشت معاملات در حافظه
 }
 
 impl Default for Config {
@@ -32,16 +33,18 @@ impl Default for Config {
     }
 }
 
+/// جهت حرکت قیمت
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Direction {
-    Up,
-    Down,
+    Up,   // رو به بالا
+    Down, // رو به پایین
 }
 
+/// سمت معامله (خرید یا فروش)
 #[derive(Copy, Clone)]
 pub enum Side {
-    Bid,
-    Ask,
+    Bid, // خرید
+    Ask, // فروش
 }
 
 impl Side {
@@ -57,10 +60,11 @@ impl Side {
     }
 }
 
+/// ساختار نگهدارنده عمق بازار گروه‌بندی شده
 #[derive(Default)]
 pub struct GroupedDepth {
-    pub orders: BTreeMap<Price, f32>,
-    pub chase: ChaseTracker,
+    pub orders: BTreeMap<Price, f32>, // سفارشات گروه‌بندی شده بر اساس قیمت
+    pub chase: ChaseTracker,          // ردیاب تعقیب قیمت برای این سمت
 }
 
 impl GroupedDepth {
@@ -71,6 +75,7 @@ impl GroupedDepth {
         }
     }
 
+    /// گروه‌بندی مجدد داده‌های خام عمق بازار بر اساس گام قیمت جدید
     pub fn regroup_from_raw(&mut self, levels: &BTreeMap<Price, f32>, side: Side, step: PriceStep) {
         self.orders.clear();
         for (price, qty) in levels.iter() {
@@ -87,10 +92,11 @@ impl GroupedDepth {
     }
 }
 
+/// ساختار نگهدارنده و مدیریت‌کننده معاملات انجام شده در نردبان قیمت
 #[derive(Debug)]
 pub struct TradeStore {
-    pub raw: VecDeque<Trade>,
-    pub grouped: KlineTrades,
+    pub raw: VecDeque<Trade>, // لیست خام معاملات به ترتیب زمان
+    pub grouped: KlineTrades, // معاملات گروه‌بندی شده بر اساس قیمت (فوت‌پرینت)
 }
 
 impl Default for TradeStore {
@@ -111,6 +117,7 @@ impl TradeStore {
         self.raw.is_empty()
     }
 
+    /// وارد کردن معاملات جدید به حافظه و گروه‌بندی آن‌ها
     pub fn insert_trades(&mut self, buffer: &[Trade], step: PriceStep) {
         for trade in buffer {
             self.grouped.add_trade_to_side_bin(trade, step);
@@ -147,6 +154,7 @@ impl TradeStore {
     }
 
     /// Returns true if it removed trades and regrouped.
+    /// پاکسازی معاملات قدیمی که از مدت زمان نگهداشت عبور کرده‌اند
     pub fn maybe_cleanup(&mut self, now_ms: u64, retention: Duration, step: PriceStep) -> bool {
         let Some(oldest) = self.raw.front() else {
             return false;
@@ -157,7 +165,7 @@ impl TradeStore {
             return false;
         }
 
-        // ~1/10th of retention, min 5s
+        // بررسی اینکه آیا زمان پاکسازی فرا رسیده است (تقریباً هر ۱/۱۰ زمان نگهداشت)
         let cleanup_step_ms = (retention_ms / 10).max(5_000);
         let threshold_ms = retention_ms + cleanup_step_ms;
         if now_ms.saturating_sub(oldest.time) < threshold_ms {
@@ -184,33 +192,33 @@ impl TradeStore {
 }
 
 #[derive(Debug, Clone, Copy, Default)]
+/// وضعیت پیشرفت تعقیب قیمت
+#[derive(Debug, Clone, Copy, Default)]
 enum ChaseProgress {
     #[default]
-    Idle,
+    Idle, // در حال انتظار
     Chasing {
-        direction: Direction,
-        start: Price,
-        end: Price,
-        /// Number of consecutive moves in the current direction
-        consecutive: u32,
+        direction: Direction, // جهت تعقیب
+        start: Price,         // قیمت شروع
+        end: Price,           // قیمت فعلی/پایان
+        consecutive: u32,     // تعداد گام‌های متوالی در این جهت
     },
     Fading {
-        direction: Direction,
-        start: Price,
-        end: Price,
-        /// Consecutive count at the moment fading started
-        start_consecutive: u32,
-        /// How many unchanged updates we have been fading
-        fade_steps: u32,
+        direction: Direction,   // جهتی که تعقیب می‌شد
+        start: Price,           // قیمت شروع تعقیب
+        end: Price,             // قیمتی که تعقیب در آن متوقف شد
+        start_consecutive: u32, // تعداد گام‌های متوالی قبل از توقف
+        fade_steps: u32,        // تعداد گام‌های سپری شده از زمان توقف (برای محو شدن تدریجی)
     },
 }
 
 #[derive(Debug, Default)]
+/// ساختار ردیاب تعقیب قیمت (برای نمایش بصری حرکت سریع قیمت)
+#[derive(Debug, Default)]
 pub struct ChaseTracker {
-    /// Last known best price (raw ungrouped)
-    last_best: Option<Price>,
-    state: ChaseProgress,
-    last_update_ms: Option<u64>,
+    last_best: Option<Price>,    // آخرین بهترین قیمت مشاهده شده
+    state: ChaseProgress,        // وضعیت فعلی تعقیب
+    last_update_ms: Option<u64>, // زمان آخرین بروزرسانی
 }
 
 impl ChaseTracker {

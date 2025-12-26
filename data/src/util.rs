@@ -6,6 +6,7 @@ const HOUR_MS: u64 = 3_600_000;
 const MINUTE_MS: u64 = 60_000;
 const SECOND_MS: u64 = 1_000;
 
+/// تابعی برای دی‌سریال‌سازی که در صورت بروز خطا، مقدار پیش‌فرض را برمی‌گرداند
 pub fn ok_or_default<'a, T, D>(deserializer: D) -> Result<T, D::Error>
 where
     T: Deserialize<'a> + Default,
@@ -15,6 +16,7 @@ where
     Ok(T::deserialize(v).unwrap_or_default())
 }
 
+/// اختصار اعداد بزرگ (مثلاً 1.5m برای یک میلیون و پانصد هزار)
 pub fn abbr_large_numbers(value: f32) -> String {
     let abs_value = value.abs();
     let sign = if value < 0.0 { "-" } else { "" };
@@ -43,6 +45,7 @@ pub fn abbr_large_numbers(value: f32) -> String {
     }
 }
 
+/// شمارش تعداد ارقام اعشار یک عدد
 pub fn count_decimals(value: f32) -> usize {
     let value_str = value.to_string();
     if let Some(pos) = value_str.find('.') {
@@ -52,6 +55,7 @@ pub fn count_decimals(value: f32) -> usize {
     }
 }
 
+/// فرمت‌بندی اعداد با استفاده از کاما برای جدا کردن هزارگان
 pub fn format_with_commas(num: f32) -> String {
     if num == 0.0 {
         return "0".to_string();
@@ -113,10 +117,12 @@ pub fn format_with_commas(num: f32) -> String {
     result
 }
 
+/// گرد کردن قیمت به نزدیک‌ترین گام قیمت (Tick Size)
 pub fn round_to_tick(value: f32, tick_size: f32) -> f32 {
     (value / tick_size).round() * tick_size
 }
 
+/// گرد کردن قیمت به گام بعدی (بالا یا پایین)
 pub fn round_to_next_tick(value: f32, tick_size: f32, down: bool) -> f32 {
     if down {
         (value / tick_size).floor() * tick_size
@@ -125,6 +131,7 @@ pub fn round_to_next_tick(value: f32, tick_size: f32, down: bool) -> f32 {
     }
 }
 
+/// اختصار مبالغ ارزی (مثلاً $1.5m)
 pub fn currency_abbr(price: f32) -> String {
     match price {
         p if p > 1_000_000_000.0 => format!("${:.2}b", p / 1_000_000_000.0),
@@ -134,6 +141,7 @@ pub fn currency_abbr(price: f32) -> String {
     }
 }
 
+/// فرمت‌بندی درصد تغییرات (با علامت + برای مقادیر مثبت)
 pub fn pct_change(change: f32) -> String {
     match change {
         c if c > 0.0 => format!("+{:.2}%", c),
@@ -141,6 +149,7 @@ pub fn pct_change(change: f32) -> String {
     }
 }
 
+/// حدس زدن گام قیمت (Tick) بر اساس محدوده قیمت
 pub fn guesstimate_ticks(range: f32) -> f32 {
     match range {
         r if r > 1_000_000_000.0 => 1_000_000.0,
@@ -159,6 +168,7 @@ pub fn guesstimate_ticks(range: f32) -> f32 {
     }
 }
 
+/// فرمت‌بندی مدت زمان به میلی‌ثانیه به صورت خوانا (مثلاً 1d 5h)
 pub fn format_duration_ms(diff_ms: u64) -> String {
     if diff_ms >= DAY_MS {
         let days = diff_ms / DAY_MS;
@@ -191,8 +201,8 @@ pub fn format_duration_ms(diff_ms: u64) -> String {
     }
 }
 
-/// Shrinks main panel if needed when adding a new panel.
-/// Ensures indicators never shrink below `MIN_PANEL_HEIGHT`
+/// محاسبه تقسیم‌بندی پنل‌ها (Splits) هنگام اضافه کردن پنل جدید
+/// تضمین می‌کند که ارتفاع پنل‌ها از `MIN_PANEL_HEIGHT` کمتر نشود
 pub fn calc_panel_splits(
     initial_main_split: f32,
     active_indicators: usize,
@@ -240,6 +250,7 @@ pub fn calc_panel_splits(
     splits
 }
 
+/// ریست کردن زمان به ابتدای روز (UTC)
 pub fn reset_to_start_of_day_utc(dt: DateTime<chrono::Utc>) -> DateTime<chrono::Utc> {
     dt.with_hour(0)
         .unwrap_or(dt)
@@ -251,10 +262,12 @@ pub fn reset_to_start_of_day_utc(dt: DateTime<chrono::Utc>) -> DateTime<chrono::
         .unwrap_or(dt)
 }
 
+/// ریست کردن زمان به ابتدای ماه (UTC)
 pub fn reset_to_start_of_month_utc(dt: DateTime<chrono::Utc>) -> DateTime<chrono::Utc> {
     reset_to_start_of_day_utc(dt.with_day(1).unwrap_or(dt))
 }
 
+/// ریست کردن زمان به ابتدای سال (UTC)
 pub fn reset_to_start_of_year_utc(dt: DateTime<chrono::Utc>) -> DateTime<chrono::Utc> {
     reset_to_start_of_month_utc(dt.with_month(1).unwrap_or(dt))
 }

@@ -6,28 +6,31 @@ use crate::{AudioStream, Layout, Theme};
 
 use serde::{Deserialize, Serialize};
 
+/// ساختار مدیریت چیدمان‌ها (Layouts)
 #[derive(Clone, Serialize, Deserialize, Default)]
 pub struct Layouts {
-    pub layouts: Vec<Layout>,
-    pub active_layout: Option<String>,
+    pub layouts: Vec<Layout>,          // لیست تمامی چیدمان‌های ذخیره شده
+    pub active_layout: Option<String>, // نام چیدمان فعال فعلی
 }
 
+/// ساختار کلی وضعیت برنامه (Application State) برای ذخیره‌سازی و بازیابی
 #[derive(Default, Clone, Deserialize, Serialize)]
 #[serde(default)]
 pub struct State {
-    pub layout_manager: Layouts,
-    pub selected_theme: Theme,
-    pub custom_theme: Option<Theme>,
-    pub main_window: Option<WindowSpec>,
-    pub timezone: UserTimezone,
-    pub sidebar: Sidebar,
-    pub scale_factor: ScaleFactor,
-    pub audio_cfg: AudioStream,
-    pub trade_fetch_enabled: bool,
-    pub size_in_quote_ccy: exchange::SizeUnit,
+    pub layout_manager: Layouts,          // مدیریت چیدمان‌ها
+    pub selected_theme: Theme,            // تم انتخاب شده
+    pub custom_theme: Option<Theme>,      // تم سفارشی (در صورت وجود)
+    pub main_window: Option<WindowSpec>,  // مشخصات پنجره اصلی
+    pub timezone: UserTimezone,           // منطقه زمانی کاربر
+    pub sidebar: Sidebar,                 // تنظیمات نوار کناری
+    pub scale_factor: ScaleFactor,        // ضریب مقیاس رابط کاربری
+    pub audio_cfg: AudioStream,           // تنظیمات صوتی
+    pub trade_fetch_enabled: bool,        // آیا دریافت تاریخچه معاملات فعال است؟
+    pub size_in_quote_ccy: exchange::SizeUnit, // واحد نمایش حجم (پایه یا کوت)
 }
 
 impl State {
+    /// ایجاد یک نمونه جدید از وضعیت برنامه با استفاده از اجزای مختلف
     pub fn from_parts(
         layout_manager: Layouts,
         selected_theme: Theme,

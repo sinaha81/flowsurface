@@ -1,3 +1,4 @@
+// ماژول‌های مربوط به مدیریت داده‌ها، تنظیمات و ابزارهای کمکی
 pub mod aggr;
 pub mod audio;
 pub mod chart;
@@ -24,14 +25,16 @@ pub use layout::{Dashboard, Layout, Pane};
 
 pub const SAVED_STATE_PATH: &str = "saved-state.json";
 
+/// خطاهای داخلی مربوط به مدیریت داده‌ها
 #[derive(thiserror::Error, Debug, Clone)]
 pub enum InternalError {
     #[error("Fetch error: {0}")]
-    Fetch(String),
+    Fetch(String), // خطای دریافت داده
     #[error("Layout error: {0}")]
-    Layout(String),
+    Layout(String), // خطای مربوط به چیدمان
 }
 
+/// نوشتن داده‌های JSON در یک فایل در مسیر داده‌های برنامه
 pub fn write_json_to_file(json: &str, file_name: &str) -> std::io::Result<()> {
     let path = data_path(Some(file_name));
 
@@ -39,6 +42,7 @@ pub fn write_json_to_file(json: &str, file_name: &str) -> std::io::Result<()> {
         std::io::Error::new(std::io::ErrorKind::InvalidInput, "Invalid state file path")
     })?;
 
+    // ایجاد پوشه‌های والد در صورت عدم وجود
     if !parent.exists() {
         std::fs::create_dir_all(parent)?;
     }
@@ -48,6 +52,7 @@ pub fn write_json_to_file(json: &str, file_name: &str) -> std::io::Result<()> {
     Ok(())
 }
 
+/// خواندن وضعیت برنامه (State) از یک فایل
 pub fn read_from_file(file_name: &str) -> Result<State, Box<dyn std::error::Error>> {
     let path = data_path(Some(file_name));
 
@@ -62,13 +67,14 @@ pub fn read_from_file(file_name: &str) -> Result<State, Box<dyn std::error::Erro
         return Err(Box::new(e));
     }
 
+    // تلاش برای تبدیل متن JSON به ساختار State
     match serde_json::from_str(&contents) {
         Ok(state) => Ok(state),
         Err(e) => {
-            // If parsing fails, backup the file
-            drop(file); // Close the file before renaming
+            // در صورت بروز خطا در پارس کردن، از فایل فعلی نسخه پشتیبان تهیه می‌شود
+            drop(file); // بستن فایل قبل از تغییر نام
 
-            // Create backup file with different name to prevent overwriting it
+            // ایجاد نام فایل پشتیبان (مثلاً saved-state_old.json)
             let backup_file_name = if let Some(pos) = file_name.rfind('.') {
                 format!("{}_old{}", &file_name[..pos], &file_name[pos..])
             } else {
@@ -96,6 +102,7 @@ pub fn read_from_file(file_name: &str) -> Result<State, Box<dyn std::error::Erro
     }
 }
 
+/// باز کردن پوشه داده‌های برنامه در فایل اکسپلورر سیستم‌عامل
 pub fn open_data_folder() -> Result<(), InternalError> {
     let pathbuf = data_path(None);
 
@@ -117,10 +124,13 @@ pub fn open_data_folder() -> Result<(), InternalError> {
     }
 }
 
+/// دریافت مسیر کامل پوشه داده‌های برنامه
 pub fn data_path(path_name: Option<&str>) -> PathBuf {
+    // اولویت با متغیر محیطی FLOWSURFACE_DATA_PATH است
     if let Ok(path) = std::env::var("FLOWSURFACE_DATA_PATH") {
         PathBuf::from(path)
     } else {
+        // در غیر این صورت از مسیر پیش‌فرض سیستم برای داده‌های برنامه‌ها استفاده می‌شود
         let data_dir = dirs_next::data_dir().unwrap_or_else(|| PathBuf::from("."));
         if let Some(path_name) = path_name {
             data_dir.join("flowsurface").join(path_name)
@@ -130,12 +140,14 @@ pub fn data_path(path_name: Option<&str>) -> PathBuf {
     }
 }
 
+/// پاکسازی فایل‌های قدیمی در یک پوشه مشخص (فایل‌های با عمر بیش از 4 روز)
 fn cleanup_directory(data_path: &PathBuf) -> usize {
     if !data_path.exists() {
         warn!("Data path {:?} does not exist, skipping cleanup", data_path);
         return 0;
     }
 
+    // الگوی شناسایی فایل‌های فشرده حاوی تاریخ
     let re =
         regex::Regex::new(r".*-(\d{4}-\d{2}-\d{2})\.zip$").expect("Cleanup regex pattern is valid");
     let today = chrono::Local::now().date_naive();
@@ -164,6 +176,7 @@ fn cleanup_directory(data_path: &PathBuf) -> usize {
                 continue;
             };
 
+            // بررسی تاریخ فایل و حذف در صورت قدیمی بودن
             if let Some(cap) = re.captures(filename)
                 && let Ok(file_date) = chrono::NaiveDate::parse_from_str(&cap[1], "%Y-%m-%d")
             {
@@ -183,6 +196,7 @@ fn cleanup_directory(data_path: &PathBuf) -> usize {
     deleted_files.len()
 }
 
+/// پاکسازی داده‌های قدیمی بازار (Binance Futures)
 pub fn cleanup_old_market_data() -> usize {
     let paths = ["um", "cm"].map(|market_type| {
         data_path(Some(&format!(

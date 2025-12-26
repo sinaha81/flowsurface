@@ -7,31 +7,42 @@ use crate::chart::kline::{ClusterKind, KlineDataPoint, KlineTrades, NPoc};
 use exchange::util::{Price, PriceStep};
 use exchange::{Kline, Timeframe, Trade};
 
+/// تریت برای تعریف ویژگی‌های یک نقطه داده (Data Point) در سری زمانی
 pub trait DataPoint {
+    /// اضافه کردن یک معامله به نقطه داده
     fn add_trade(&mut self, trade: &Trade, step: PriceStep);
 
+    /// پاکسازی معاملات ذخیره شده در نقطه داده
     fn clear_trades(&mut self);
 
+    /// زمان آخرین معامله انجام شده
     fn last_trade_time(&self) -> Option<u64>;
 
+    /// زمان اولین معامله انجام شده
     fn first_trade_time(&self) -> Option<u64>;
 
+    /// آخرین قیمت ثبت شده
     fn last_price(&self) -> Price;
 
+    /// دریافت داده‌های کندل‌استیک (در صورت وجود)
     fn kline(&self) -> Option<&Kline>;
 
+    /// بالاترین قیمت ثبت شده
     fn value_high(&self) -> Price;
 
+    /// پایین‌ترین قیمت ثبت شده
     fn value_low(&self) -> Price;
 }
 
+/// ساختار مدیریت سری زمانی داده‌ها (Time Series)
 pub struct TimeSeries<D: DataPoint> {
-    pub datapoints: BTreeMap<u64, D>,
-    pub interval: Timeframe,
-    pub tick_size: PriceStep,
+    pub datapoints: BTreeMap<u64, D>, // نگاشت زمان به نقاط داده
+    pub interval: Timeframe,         // بازه زمانی (مثلاً 1m, 5m)
+    pub tick_size: PriceStep,        // گام قیمت
 }
 
 impl<D: DataPoint> TimeSeries<D> {
+    /// دریافت قیمت پایه (آخرین قیمت ثبت شده در کل سری)
     pub fn base_price(&self) -> Price {
         self.datapoints
             .values()
@@ -47,6 +58,7 @@ impl<D: DataPoint> TimeSeries<D> {
         self.datapoints.values().last().and_then(|dp| dp.kline())
     }
 
+    /// محاسبه محدوده قیمت (بالاترین و پایین‌ترین) در یک بازه مشخص از انتها
     pub fn price_scale(&self, lookback: usize) -> (Price, Price) {
         let mut iter = self.datapoints.iter().rev().take(lookback);
 
@@ -121,6 +133,7 @@ impl<D: DataPoint> TimeSeries<D> {
         }
     }
 
+    /// بررسی یکپارچگی داده‌ها و شناسایی کندل‌های مفقود شده
     pub fn check_kline_integrity(
         &self,
         earliest: u64,
@@ -161,6 +174,7 @@ impl<D: DataPoint> TimeSeries<D> {
 }
 
 impl TimeSeries<KlineDataPoint> {
+    /// ایجاد یک سری زمانی جدید برای داده‌های کندل‌استیک
     pub fn new(interval: Timeframe, tick_size: PriceStep, klines: &[Kline]) -> Self {
         let mut timeseries = Self {
             datapoints: BTreeMap::new(),
@@ -183,6 +197,7 @@ impl TimeSeries<KlineDataPoint> {
         new_series
     }
 
+    /// وارد کردن کندل‌های جدید به سری زمانی
     pub fn insert_klines(&mut self, klines: &[Kline]) {
         for kline in klines {
             let entry = self
@@ -199,6 +214,7 @@ impl TimeSeries<KlineDataPoint> {
         self.update_poc_status();
     }
 
+    /// وارد کردن معاملات و ایجاد بازه‌های زمانی (Buckets) در صورت نیاز
     pub fn insert_trades_or_create_bucket(&mut self, buffer: &[Trade]) {
         if buffer.is_empty() {
             return;
@@ -272,6 +288,7 @@ impl TimeSeries<KlineDataPoint> {
         }
     }
 
+    /// بروزرسانی وضعیت NPoc (Naked Point of Control) برای سری زمانی
     pub fn update_poc_status(&mut self) {
         let updates = self
             .datapoints
@@ -282,6 +299,7 @@ impl TimeSeries<KlineDataPoint> {
         for (current_time, poc_price) in updates {
             let mut npoc = NPoc::default();
 
+            // بررسی اینکه آیا POC توسط کندل‌های بعدی لمس شده است
             for (&next_time, next_dp) in self.datapoints.range((current_time + 1)..) {
                 let next_dp_low = next_dp.kline.low.round_to_side_step(true, self.tick_size);
                 let next_dp_high = next_dp.kline.high.round_to_side_step(false, self.tick_size);
@@ -300,6 +318,7 @@ impl TimeSeries<KlineDataPoint> {
         }
     }
 
+    /// پیشنهاد بازه زمانی برای دریافت معاملات (Fetch) بر اساس شکاف‌های موجود در داده‌ها
     pub fn suggest_trade_fetch_range(
         &self,
         visible_earliest: u64,
@@ -331,6 +350,7 @@ impl TimeSeries<KlineDataPoint> {
             })
     }
 
+    /// پیدا کردن شکاف (Gap) در داده‌های معاملات
     fn find_trade_gap(&self) -> Option<(Option<u64>, Option<u64>)> {
         let empty_kline_time = self
             .datapoints
@@ -379,6 +399,7 @@ impl TimeSeries<KlineDataPoint> {
 }
 
 impl TimeSeries<HeatmapDataPoint> {
+    /// ایجاد یک سری زمانی جدید برای نقشه حرارتی (Heatmap)
     pub fn new(basis: Basis, tick_size: PriceStep) -> Self {
         let timeframe = match basis {
             Basis::Time(interval) => interval,
@@ -392,6 +413,7 @@ impl TimeSeries<HeatmapDataPoint> {
         }
     }
 
+    /// محاسبه حداکثر حجم معامله و حجم تجمیعی در یک بازه زمانی
     pub fn max_trade_qty_and_aggr_volume(&self, earliest: u64, latest: u64) -> (f32, f32) {
         let mut max_trade_qty = 0.0f32;
         let mut max_aggr_volume = 0.0f32;

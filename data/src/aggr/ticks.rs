@@ -5,14 +5,16 @@ use exchange::{Kline, Trade};
 
 use std::collections::BTreeMap;
 
+/// ساختار نگهدارنده داده‌های تجمیع شده برای یک بازه تیک مشخص
 #[derive(Debug, Clone)]
 pub struct TickAccumulation {
-    pub tick_count: usize,
-    pub kline: Kline,
-    pub footprint: KlineTrades,
+    pub tick_count: usize,     // تعداد تیک‌های فعلی در این بازه
+    pub kline: Kline,          // داده‌های کندل‌استیک (OHLCV)
+    pub footprint: KlineTrades, // داده‌های فوت‌پرینت (معاملات در سطوح قیمتی مختلف)
 }
 
 impl TickAccumulation {
+    /// ایجاد یک نمونه جدید از تجمع تیک با اولین معامله
     pub fn new(trade: &Trade, step: PriceStep) -> Self {
         let mut footprint = KlineTrades::new();
         footprint.add_trade_to_nearest_bin(trade, step);
@@ -36,6 +38,7 @@ impl TickAccumulation {
         }
     }
 
+    /// بروزرسانی تجمع فعلی با یک معامله جدید
     pub fn update_with_trade(&mut self, trade: &Trade, step: PriceStep) {
         self.tick_count += 1;
         self.kline.high = self.kline.high.max(trade.price);
@@ -68,6 +71,7 @@ impl TickAccumulation {
         }
     }
 
+    /// بررسی اینکه آیا این بازه تیک پر شده است یا خیر
     pub fn is_full(&self, interval: aggr::TickCount) -> bool {
         self.tick_count >= interval.0 as usize
     }
@@ -85,13 +89,15 @@ impl TickAccumulation {
     }
 }
 
+/// ساختار مدیریت تجمیع تیک‌ها (Tick Aggregator)
 pub struct TickAggr {
-    pub datapoints: Vec<TickAccumulation>,
-    pub interval: aggr::TickCount,
-    pub tick_size: PriceStep,
+    pub datapoints: Vec<TickAccumulation>, // لیست نقاط داده تجمیع شده
+    pub interval: aggr::TickCount,         // بازه تیک (مثلاً 100T)
+    pub tick_size: PriceStep,              // گام قیمت
 }
 
 impl TickAggr {
+    /// ایجاد یک نمونه جدید از تجمیع‌کننده تیک
     pub fn new(interval: aggr::TickCount, tick_size: PriceStep, raw_trades: &[Trade]) -> Self {
         let mut tick_aggr = Self {
             datapoints: Vec::new(),
@@ -116,7 +122,7 @@ impl TickAggr {
         }
     }
 
-    /// return latest data point and its index
+    /// دریافت آخرین نقطه داده و ایندکس آن
     pub fn latest_dp(&self) -> Option<(&TickAccumulation, usize)> {
         self.datapoints
             .last()
@@ -127,6 +133,7 @@ impl TickAggr {
         self.into()
     }
 
+    /// وارد کردن معاملات جدید به تجمیع‌کننده
     pub fn insert_trades(&mut self, buffer: &[Trade]) {
         let mut updated_indices = Vec::new();
 
@@ -138,11 +145,13 @@ impl TickAggr {
             } else {
                 let last_idx = self.datapoints.len() - 1;
 
+                // اگر بازه فعلی پر شده باشد، یک بازه جدید ایجاد می‌شود
                 if self.datapoints[last_idx].is_full(self.interval) {
                     self.datapoints
                         .push(TickAccumulation::new(trade, self.tick_size));
                     updated_indices.push(self.datapoints.len() - 1);
                 } else {
+                    // در غیر این صورت، بازه فعلی بروزرسانی می‌شود
                     self.datapoints[last_idx].update_with_trade(trade, self.tick_size);
                     if !updated_indices.contains(&last_idx) {
                         updated_indices.push(last_idx);
@@ -151,6 +160,7 @@ impl TickAggr {
             }
         }
 
+        // محاسبه مجدد POC برای نقاط داده بروزرسانی شده
         for idx in updated_indices {
             if idx < self.datapoints.len() {
                 self.datapoints[idx].calculate_poc();
@@ -160,6 +170,7 @@ impl TickAggr {
         self.update_poc_status();
     }
 
+    /// بروزرسانی وضعیت NPoc (Naked Point of Control)
     pub fn update_poc_status(&mut self) {
         let updates = self
             .datapoints
@@ -173,6 +184,7 @@ impl TickAggr {
         for (current_idx, poc_price) in updates {
             let mut npoc = NPoc::default();
 
+            // بررسی اینکه آیا POC توسط کندل‌های بعدی لمس (Fill) شده است یا خیر
             for next_idx in (current_idx + 1)..total_points {
                 let next_dp = &self.datapoints[next_idx];
 
@@ -180,8 +192,6 @@ impl TickAggr {
                 let next_dp_high = next_dp.kline.high.round_to_side_step(false, self.tick_size);
 
                 if next_dp_low <= poc_price && next_dp_high >= poc_price {
-                    // on render we reverse the order of the points
-                    // as it is easier to just take the idx=0 as latest candle for coords
                     let reversed_idx = (total_points - 1) - next_idx;
                     npoc.filled(reversed_idx as u64);
                     break;

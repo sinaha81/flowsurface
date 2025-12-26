@@ -7,18 +7,19 @@ edition.workspace = true
 repository.workspace = true
 homepage.workspace = true
 
+# وابستگی‌های پروژه برای مدیریت داده‌ها و تنظیمات
 [dependencies]
-serde_json.workspace = true
-serde.workspace = true
-iced_core.workspace = true
-chrono.workspace = true
-regex.workspace = true
-palette.workspace = true
-enum-map.workspace = true
-rustc-hash.workspace = true
-dirs-next = "2.0.0"
-open = "5.3.2"
+serde_json.workspace = true # کار با فرمت JSON
+serde.workspace = true      # سریال‌سازی و دی‌سریال‌سازی داده‌ها
+iced_core.workspace = true  # هسته کتابخانه رابط کاربری Iced
+chrono.workspace = true     # مدیریت زمان و تاریخ
+regex.workspace = true      # کار با عبارات منظم
+palette.workspace = true    # مدیریت رنگ‌ها
+enum-map.workspace = true   # نگاشت برای انوم‌ها
+rustc-hash.workspace = true # هشینگ سریع
+dirs-next = "2.0.0"         # پیدا کردن مسیر پوشه‌های سیستم (مانند Config)
+open = "5.3.2"              # باز کردن فایل‌ها یا لینک‌ها در سیستم‌عامل
 
-log = { version = "0.4.22", default-features = true, features = ["std"] }
-thiserror = { version = "2.0.12", default-features = true, features = ["std"] }
-exchange = { version = "0.1.0", path = "../exchange", package = "flowsurface-exchange" }
+log = { version = "0.4.22", default-features = true, features = ["std"] } # سیستم لاگینگ
+thiserror = { version = "2.0.12", default-features = true, features = ["std"] } # مدیریت آسان خطاها
+exchange = { version = "0.1.0", path = "../exchange", package = "flowsurface-exchange" } # کریت مربوط به صرافی‌ها

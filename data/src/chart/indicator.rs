@@ -4,16 +4,19 @@ use enum_map::Enum;
 use exchange::adapter::MarketKind;
 use serde::{Deserialize, Serialize};
 
+/// تریت پایه برای تمامی اندیکاتورها
 pub trait Indicator: PartialEq + Display + 'static {
+    /// دریافت اندیکاتورهای موجود برای یک نوع بازار خاص
     fn for_market(market: MarketKind) -> &'static [Self]
     where
         Self: Sized;
 }
 
+/// اندیکاتورهای مربوط به نمودار کندل‌استیک
 #[derive(Debug, Clone, Copy, PartialEq, Deserialize, Serialize, Eq, Enum)]
 pub enum KlineIndicator {
-    Volume,
-    OpenInterest,
+    Volume,       // حجم معاملات
+    OpenInterest, // بهره باز (فقط برای قراردادهای آتی)
 }
 
 impl Indicator for KlineIndicator {
@@ -28,9 +31,9 @@ impl Indicator for KlineIndicator {
 impl KlineIndicator {
     // Indicator togglers on UI menus depend on these arrays.
     // Every variant needs to be in either SPOT, PERPS or both.
-    /// Indicators that can be used with spot market tickers
+    /// اندیکاتورهای قابل استفاده در بازار اسپات (Spot)
     const FOR_SPOT: [KlineIndicator; 1] = [KlineIndicator::Volume];
-    /// Indicators that can be used with perpetual swap market tickers
+    /// اندیکاتورهای قابل استفاده در بازار قراردادهای دائمی (Perpetual)
     const FOR_PERPS: [KlineIndicator; 2] = [KlineIndicator::Volume, KlineIndicator::OpenInterest];
 }
 
@@ -43,9 +46,10 @@ impl Display for KlineIndicator {
     }
 }
 
+/// اندیکاتورهای مربوط به نقشه حرارتی (Heatmap)
 #[derive(Debug, Clone, Copy, PartialEq, Deserialize, Serialize, Eq, Enum)]
 pub enum HeatmapIndicator {
-    Volume,
+    Volume, // حجم معاملات
 }
 
 impl Indicator for HeatmapIndicator {
@@ -60,9 +64,9 @@ impl Indicator for HeatmapIndicator {
 impl HeatmapIndicator {
     // Indicator togglers on UI menus depend on these arrays.
     // Every variant needs to be in either SPOT, PERPS or both.
-    /// Indicators that can be used with spot market tickers
+    /// اندیکاتورهای قابل استفاده در بازار اسپات برای نقشه حرارتی
     const FOR_SPOT: [HeatmapIndicator; 1] = [HeatmapIndicator::Volume];
-    /// Indicators that can be used with perpetual swap market tickers
+    /// اندیکاتورهای قابل استفاده در بازار قراردادهای دائمی برای نقشه حرارتی
     const FOR_PERPS: [HeatmapIndicator; 1] = [HeatmapIndicator::Volume];
 }
 
@@ -74,9 +78,8 @@ impl Display for HeatmapIndicator {
     }
 }
 
+/// ساختار موقت برای نمایش هر نوع اندیکاتور در رابط کاربری
 #[derive(Debug, Clone, Copy)]
-/// Temporary workaround,
-/// represents any indicator type in the UI
 pub enum UiIndicator {
     Heatmap(HeatmapIndicator),
     Kline(KlineIndicator),
