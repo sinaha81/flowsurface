@@ -11,6 +11,7 @@ use iced::{
     widget::{button, column, container, row, scrollable, slider, space, text, tooltip::Position},
 };
 
+// ماژول‌های مربوط به ویجت‌های اختصاصی برنامه
 pub mod chart;
 pub mod color_picker;
 pub mod column_drag;
@@ -21,14 +22,16 @@ pub mod toast;
 #[allow(dead_code)]
 pub const DEFAULT_TOOLTIP_DELAY: std::time::Duration = std::time::Duration::from_millis(500);
 
+/// ایجاد یک تولتیپ (Tooltip) ساده برای یک عنصر
 pub fn tooltip<'a, Message: 'a>(
-    content: impl Into<Element<'a, Message>>,
-    tooltip: Option<&'a str>,
-    position: Position,
+    content: impl Into<Element<'a, Message>>, // عنصر اصلی
+    tooltip: Option<&'a str>,                 // متن تولتیپ
+    position: Position,                       // موقعیت نمایش
 ) -> Element<'a, Message> {
     tooltip_with_delay(content, tooltip, position, std::time::Duration::ZERO)
 }
 
+/// ایجاد یک تولتیپ با تاخیر زمانی در نمایش
 pub fn tooltip_with_delay<'a, Message: 'a>(
     content: impl Into<Element<'a, Message>>,
     tooltip: Option<&'a str>,
@@ -47,6 +50,7 @@ pub fn tooltip_with_delay<'a, Message: 'a>(
     }
 }
 
+/// ایجاد یک محتوای قابل اسکرول (عمودی)
 pub fn scrollable_content<'a, Message: 'a>(
     content: impl Into<Element<'a, Message>>,
 ) -> Element<'a, Message> {
@@ -57,6 +61,7 @@ pub fn scrollable_content<'a, Message: 'a>(
     .into()
 }
 
+/// ایجاد کانتینر برای دیالوگ تایید (Confirm Dialog)
 pub fn confirm_dialog_container<'a, Message: 'a + Clone>(
     confirm_dialog: ConfirmDialog<Message>,
     on_cancel: Message,
@@ -84,6 +89,7 @@ pub fn confirm_dialog_container<'a, Message: 'a + Clone>(
     .into()
 }
 
+/// ایجاد یک ردیف شامل لیبل و اسلایدر کلاسیک
 pub fn classic_slider_row<'a, Message>(
     label: iced::widget::Text<'a>,
     slider: Element<'a, Message>,
@@ -110,6 +116,7 @@ where
     .into()
 }
 
+/// ایجاد یک دکمه به همراه تولتیپ
 pub fn button_with_tooltip<'a, M: Clone + 'a>(
     content: impl Into<Element<'a, M>>,
     message: M,
@@ -126,9 +133,10 @@ pub fn button_with_tooltip<'a, M: Clone + 'a>(
     }
 }
 
+/// ایجاد یک ردیف با قابلیت جابجایی (Drag)
 pub fn dragger_row<'a, Message>(
-    content: Element<'a, Message>,
-    is_enabled: bool,
+    content: Element<'a, Message>, // محتوای ردیف
+    is_enabled: bool,              // آیا قابلیت جابجایی فعال است؟
 ) -> Element<'a, Message>
 where
     Message: Clone + 'a,
@@ -149,13 +157,14 @@ where
         .into()
 }
 
+/// ایجاد یک اسلایدر به همراه لیبل و مقدار فعلی
 pub fn labeled_slider<'a, T, Message: Clone + 'static>(
-    label: impl text::IntoFragment<'a>,
-    range: std::ops::RangeInclusive<T>,
-    current: T,
-    on_change: impl Fn(T) -> Message + 'a,
-    to_string: impl Fn(&T) -> String,
-    step: Option<T>,
+    label: impl text::IntoFragment<'a>,           // لیبل اسلایدر
+    range: std::ops::RangeInclusive<T>,           // محدوده مقادیر
+    current: T,                                   // مقدار فعلی
+    on_change: impl Fn(T) -> Message + 'a,        // تابع فراخوانی هنگام تغییر
+    to_string: impl Fn(&T) -> String,             // تابع تبدیل مقدار به متن
+    step: Option<T>,                              // گام‌های تغییر
 ) -> Element<'a, Message>
 where
     T: 'static + Copy + PartialOrd + Into<f64> + From<u8> + num_traits::FromPrimitive,
@@ -207,13 +216,14 @@ where
     .into()
 }
 
+/// ایجاد یک جعبه ورودی عددی به همراه لیبل
 pub fn numeric_input_box<'a, F, Message: Clone + 'static>(
-    label: &'a str,
-    placeholder: &str,
-    raw_input_buf: &str,
-    is_input_valid: bool,
-    on_input_changed: F,
-    on_submit_maybe: Option<Message>,
+    label: &'a str,               // لیبل ورودی
+    placeholder: &str,           // متن راهنما (Placeholder)
+    raw_input_buf: &str,         // بافر ورودی خام
+    is_input_valid: bool,        // آیا ورودی معتبر است؟
+    on_input_changed: F,         // تابع فراخوانی هنگام تغییر ورودی
+    on_submit_maybe: Option<Message>, // پیام ارسالی هنگام تایید (اختیاری)
 ) -> Element<'a, Message>
 where
     F: Fn(String) -> Message + 'static,
@@ -231,6 +241,7 @@ where
         .into()
 }
 
+/// ایجاد دکمه مربوط به گروه‌بندی پیوندها (Link Group)
 pub fn link_group_button<'a, Message, F>(
     id: iced::widget::pane_grid::Pane,
     link_group: Option<data::layout::pane::LinkGroup>,
@@ -264,9 +275,9 @@ where
 }
 
 #[macro_export]
-/// Creates a column with horizontal rules between each item.
+/// ایجاد یک ستون که بین هر آیتم آن یک خط جداکننده افقی قرار می‌گیرد
 ///
-/// # Examples
+/// # مثال
 /// ```
 /// split_column![
 ///     text("Item 1"),

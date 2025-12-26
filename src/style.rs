@@ -9,6 +9,7 @@ use iced::widget::pane_grid::{Highlight, Line};
 use iced::widget::scrollable::{AutoScroll, Rail, Scroller};
 use iced::{Border, Color, Font, Renderer, Shadow, Theme, widget};
 
+// فونت‌های مورد استفاده در برنامه
 pub const ICONS_BYTES: &[u8] = include_bytes!(".././assets/fonts/icons.ttf");
 pub const ICONS_FONT: Font = Font::with_name("icons");
 
@@ -22,38 +23,39 @@ pub const AZERET_MONO: Font = Font {
 
 pub const TITLE_PADDING_TOP: f32 = if cfg!(target_os = "macos") { 20.0 } else { 0.0 };
 
+/// لیست آیکون‌های مورد استفاده در رابط کاربری
 pub enum Icon {
-    Locked,
-    Unlocked,
-    ResizeFull,
-    ResizeSmall,
-    Close,
-    Layout,
-    Cog,
-    Link,
-    BinanceLogo,
-    BybitLogo,
-    HyperliquidLogo,
-    OkexLogo,
-    Search,
-    Sort,
-    SortDesc,
-    SortAsc,
-    Star,
-    StarFilled,
-    Return,
-    Popout,
-    ChartOutline,
-    TrashBin,
-    Edit,
-    Checkmark,
-    Clone,
-    SpeakerOff,
-    SpeakerLow,
-    SpeakerHigh,
-    DragHandle,
-    Folder,
-    ExternalLink,
+    Locked,          // قفل شده
+    Unlocked,        // قفل باز
+    ResizeFull,      // بزرگنمایی کامل
+    ResizeSmall,     // کوچک‌نمایی
+    Close,           // بستن
+    Layout,          // چیدمان
+    Cog,             // تنظیمات
+    Link,            // پیوند
+    BinanceLogo,     // لوگوی بایننس
+    BybitLogo,       // لوگوی بای‌بیت
+    HyperliquidLogo, // لوگوی هایپرلیکوئید
+    OkexLogo,        // لوگوی اوکی‌اکس
+    Search,          // جستجو
+    Sort,            // مرتب‌سازی
+    SortDesc,        // مرتب‌سازی نزولی
+    SortAsc,         // مرتب‌سازی صعودی
+    Star,            // ستاره (علاقه‌مندی)
+    StarFilled,      // ستاره پر شده
+    Return,          // بازگشت
+    Popout,          // باز شدن در پنجره جداگانه
+    ChartOutline,    // طرح کلی نمودار
+    TrashBin,        // سطل زباله (حذف)
+    Edit,            // ویرایش
+    Checkmark,       // تیک تایید
+    Clone,           // کپی/تکرار
+    SpeakerOff,      // بلندگو خاموش
+    SpeakerLow,      // صدای کم
+    SpeakerHigh,     // صدای زیاد
+    DragHandle,      // دستگیره جابجایی
+    Folder,          // پوشه
+    ExternalLink,    // لینک خارجی
 }
 
 impl From<Icon> for char {
@@ -94,12 +96,14 @@ impl From<Icon> for char {
     }
 }
 
+/// ایجاد یک ویجت متن حاوی آیکون
 pub fn icon_text<'a>(icon: Icon, size: u16) -> Text<'a, Theme, Renderer> {
     iced::widget::text(char::from(icon).to_string())
         .font(ICONS_FONT)
         .size(iced::Pixels(size.into()))
 }
 
+/// دریافت آیکون مربوط به هر صرافی
 pub fn exchange_icon(exchange: Exchange) -> Icon {
     match exchange {
         Exchange::BybitInverse | Exchange::BybitLinear | Exchange::BybitSpot => Icon::BybitLogo,
@@ -120,6 +124,7 @@ pub fn title_text(theme: &Theme) -> iced::widget::text::Style {
     }
 }
 
+/// استایل مربوط به تولتیپ‌ها (Tooltip)
 pub fn tooltip(theme: &Theme) -> Style {
     let palette = theme.extended_palette();
 
@@ -140,6 +145,7 @@ pub mod button {
         widget::button::{Status, Style},
     };
 
+    /// استایل دکمه تایید
     pub fn confirm(theme: &Theme, status: Status, is_active: bool) -> Style {
         let palette = theme.extended_palette();
 
@@ -166,6 +172,7 @@ pub mod button {
         }
     }
 
+    /// استایل دکمه انصراف
     pub fn cancel(theme: &Theme, status: Status, is_active: bool) -> Style {
         let palette = theme.extended_palette();
 
@@ -192,6 +199,7 @@ pub mod button {
         }
     }
 
+    /// استایل دکمه نام چیدمان
     pub fn layout_name(theme: &Theme, status: Status) -> Style {
         let palette = theme.extended_palette();
 
@@ -213,6 +221,7 @@ pub mod button {
         }
     }
 
+    /// استایل دکمه شفاف
     pub fn transparent(theme: &Theme, status: Status, is_clicked: bool) -> Style {
         let palette = theme.extended_palette();
 
@@ -275,6 +284,7 @@ pub mod button {
         }
     }
 
+    /// استایل دکمه تغییر وضعیت با حاشیه (Bordered Toggle)
     pub fn bordered_toggle(theme: &Theme, status: Status, is_active: bool) -> Style {
         let palette = theme.extended_palette();
 
@@ -394,10 +404,12 @@ pub mod button {
 }
 
 // Panes
+// استایل‌های مربوط به شبکه پنل‌ها (Pane Grid)
 pub fn pane_grid(theme: &Theme) -> widget::pane_grid::Style {
     let palette = theme.extended_palette();
 
     widget::pane_grid::Style {
+        // ناحیه هایلایت شده هنگام جابجایی پنل
         hovered_region: Highlight {
             background: palette.background.strongest.color.scale_alpha(0.5).into(),
             border: Border {
@@ -406,10 +418,12 @@ pub fn pane_grid(theme: &Theme) -> widget::pane_grid::Style {
                 radius: 4.0.into(),
             },
         },
+        // خط جداکننده انتخاب شده
         picked_split: Line {
             color: palette.primary.strong.color,
             width: 4.0,
         },
+        // خط جداکننده هنگام نگه داشتن موس روی آن
         hovered_split: Line {
             color: palette.primary.weak.color,
             width: 4.0,
@@ -417,6 +431,7 @@ pub fn pane_grid(theme: &Theme) -> widget::pane_grid::Style {
     }
 }
 
+/// استایل نوار عنوان پنل
 pub fn pane_title_bar(theme: &Theme) -> Style {
     let palette = theme.extended_palette();
 
@@ -432,6 +447,7 @@ pub fn pane_title_bar(theme: &Theme) -> Style {
     }
 }
 
+/// استایل پس‌زمینه پنل
 pub fn pane_background(theme: &Theme, is_focused: bool) -> Style {
     let palette = theme.extended_palette();
 
@@ -446,12 +462,14 @@ pub fn pane_background(theme: &Theme, is_focused: bool) -> Style {
         background: Some(palette.background.weakest.color.into()),
         border: {
             if is_focused {
+                // حاشیه پنل فوکوس شده
                 Border {
                     width: 1.0,
                     color: palette.background.strong.color,
                     radius: 4.0.into(),
                 }
             } else {
+                // حاشیه پنل معمولی
                 Border {
                     width: 1.0,
                     color: color.scale_alpha(0.5),
@@ -464,6 +482,8 @@ pub fn pane_background(theme: &Theme, is_focused: bool) -> Style {
 }
 
 // Modals
+// استایل‌های مربوط به مودال‌ها
+/// استایل مودال نمودار
 pub fn chart_modal(theme: &Theme) -> Style {
     let palette = theme.extended_palette();
 
@@ -490,6 +510,7 @@ pub fn chart_modal(theme: &Theme) -> Style {
     }
 }
 
+/// استایل مودال داشبورد
 pub fn dashboard_modal(theme: &Theme) -> Style {
     let palette = theme.extended_palette();
 
@@ -515,6 +536,7 @@ pub fn dashboard_modal(theme: &Theme) -> Style {
     }
 }
 
+/// استایل کانتینر مودال
 pub fn modal_container(theme: &Theme) -> Style {
     let palette = theme.extended_palette();
 
@@ -572,7 +594,8 @@ pub fn dragger_row_container(theme: &Theme) -> Style {
     }
 }
 
-// Tickers Table
+// استایل‌های مربوط به جدول نمادها (Tickers Table)
+/// استایل ورودی متن اعتبارسنجی شده
 pub fn validated_text_input(
     theme: &Theme,
     status: widget::text_input::Status,
@@ -616,6 +639,7 @@ pub fn validated_text_input(
     }
 }
 
+/// استایل کارت نماد معاملاتی
 pub fn ticker_card(theme: &Theme) -> Style {
     let palette = theme.extended_palette();
 
@@ -637,6 +661,7 @@ pub fn ticker_card(theme: &Theme) -> Style {
 }
 
 // the bar that lights up depending on the price change
+/// نواری که بر اساس تغییرات قیمت روشن می‌شود (در کارت نماد)
 pub fn ticker_card_bar(theme: &Theme, color_alpha: f32) -> Style {
     let palette = theme.extended_palette();
 
@@ -662,6 +687,7 @@ pub fn ticker_card_bar(theme: &Theme, color_alpha: f32) -> Style {
 }
 
 // Scrollable
+// استایل‌های مربوط به اسکرول‌بار (Scrollable)
 pub fn scroll_bar(theme: &Theme, status: widget::scrollable::Status) -> widget::scrollable::Style {
     let palette = theme.extended_palette();
 
@@ -721,6 +747,8 @@ pub fn scroll_bar(theme: &Theme, status: widget::scrollable::Status) -> widget::
 }
 
 // custom widgets
+// ویجت‌های سفارشی
+/// استایل خط‌کش جداکننده (Split Ruler)
 pub fn split_ruler(theme: &Theme) -> iced::widget::rule::Style {
     let palette = theme.extended_palette();
 
@@ -733,6 +761,7 @@ pub fn split_ruler(theme: &Theme) -> iced::widget::rule::Style {
 }
 
 // crosshair dashed line for charts
+/// خط‌چین برای نشانگر (Crosshair) در نمودارها
 pub fn dashed_line(theme: &'_ Theme) -> Stroke<'_> {
     let palette = theme.extended_palette();
 

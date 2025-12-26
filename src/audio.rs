@@ -1,24 +1,28 @@
 use rodio::{Decoder, OutputStream, OutputStreamHandle, Source};
 use std::time::{Duration, Instant};
 
+// داده‌های صوتی خام که در زمان کامپایل در برنامه گنجانده می‌شوند
 pub const BUY_SOUND_DATA: &[u8] = include_bytes!("../assets/sounds/hard-typewriter-click.wav");
 pub const HARD_BUY_SOUND_DATA: &[u8] = include_bytes!("../assets/sounds/dry-pop-up.wav");
 pub const SELL_SOUND_DATA: &[u8] = include_bytes!("../assets/sounds/hard-typewriter-hit.wav");
 pub const HARD_SELL_SOUND_DATA: &[u8] = include_bytes!("../assets/sounds/fall-on-foam-splash.wav");
 
+// نام فایل‌های صوتی
 pub const BUY_SOUND: &str = "hard-typewriter-click.wav";
 pub const HARD_BUY_SOUND: &str = "dry-pop-up.wav";
 pub const SELL_SOUND: &str = "hard-typewriter-hit.wav";
 pub const HARD_SELL_SOUND: &str = "fall-on-foam-splash.wav";
 
+// آستانه زمانی برای جلوگیری از پخش همزمان و آزاردهنده صداها
 const OVERLAP_THRESHOLD: Duration = Duration::from_millis(10);
 
+/// انواع صداهای موجود در برنامه
 #[derive(Clone, Copy)]
 pub enum SoundType {
-    Buy = 0,
-    HardBuy = 1,
-    Sell = 2,
-    HardSell = 3,
+    Buy = 0,      // خرید معمولی
+    HardBuy = 1,  // خرید سنگین
+    Sell = 2,     // فروش معمولی
+    HardSell = 3, // فروش سنگین
 }
 
 impl std::fmt::Display for SoundType {
@@ -42,15 +46,17 @@ impl From<SoundType> for usize {
     }
 }
 
+/// مدیریت و کش کردن صداها برای پخش سریع
 pub struct SoundCache {
-    _stream: OutputStream,
-    stream_handle: OutputStreamHandle,
-    volume: Option<f32>,
-    sample_buffers: [Option<rodio::buffer::SamplesBuffer<i16>>; 4],
-    last_played: [(Option<Instant>, usize); 4],
+    _stream: OutputStream,               // جریان خروجی صدا
+    stream_handle: OutputStreamHandle,   // هندل برای ارسال صدا به خروجی
+    volume: Option<f32>,                 // سطح صدا (اگر None باشد یعنی بی‌صدا)
+    sample_buffers: [Option<rodio::buffer::SamplesBuffer<i16>>; 4], // بافرهای صوتی رمزگشایی شده
+    last_played: [(Option<Instant>, usize); 4], // زمان و تعداد دفعات آخرین پخش برای مدیریت همپوشانی
 }
 
 impl SoundCache {
+    /// ایجاد یک نمونه جدید از مدیریت صدا
     pub fn new(volume: Option<f32>) -> Result<Self, String> {
         let (stream, stream_handle) = match OutputStream::try_default() {
             Ok(result) => result,
@@ -68,6 +74,7 @@ impl SoundCache {
         })
     }
 
+    /// ایجاد مدیریت صدا به همراه بارگذاری صداهای پیش‌فرض
     pub fn with_default_sounds(volume: Option<f32>) -> Result<Self, String> {
         let mut cache = Self::new(volume)?;
 
@@ -94,6 +101,7 @@ impl SoundCache {
         Ok(cache)
     }
 
+    /// بارگذاری داده‌های صوتی از حافظه و رمزگشایی آن‌ها
     pub fn load_sound_from_memory(
         &mut self,
         sound_type: SoundType,
@@ -101,6 +109,7 @@ impl SoundCache {
     ) -> Result<(), String> {
         let index = sound_type as usize;
 
+        // اگر قبلاً بارگذاری شده باشد، کاری انجام نمی‌دهیم
         if self.sample_buffers[index].is_some() {
             return Ok(());
         }
@@ -123,7 +132,9 @@ impl SoundCache {
         Ok(())
     }
 
+    /// پخش یک صدا بر اساس نوع آن
     pub fn play(&mut self, sound_type: SoundType) -> Result<(), String> {
+        // اگر برنامه بی‌صدا باشد، پخش نمی‌کنیم
         let Some(base_volume) = self.volume else {
             return Ok(());
         };
@@ -137,6 +148,7 @@ impl SoundCache {
         let now = Instant::now();
         let (last_time, count) = &mut self.last_played[index];
 
+        // مدیریت همپوشانی: اگر صداها خیلی سریع پشت هم باشند، ولوم را کاهش می‌دهیم
         let overlap_count = if let Some(last) = last_time {
             if now.duration_since(*last) < OVERLAP_THRESHOLD {
                 *count += 1;
@@ -164,11 +176,12 @@ impl SoundCache {
 
         sink.set_volume(adjusted_volume / 100.0);
         sink.append(buffer.clone());
-        sink.detach();
+        sink.detach(); // جدا کردن سینک برای ادامه پخش در پس‌زمینه
 
         Ok(())
     }
 
+    /// تنظیم سطح صدا
     pub fn set_volume(&mut self, level: f32) {
         if level == 0.0 {
             self.volume = None;
@@ -177,10 +190,12 @@ impl SoundCache {
         self.volume = Some(level.clamp(0.0, 100.0));
     }
 
+    /// دریافت سطح فعلی صدا
     pub fn get_volume(&self) -> Option<f32> {
         self.volume
     }
 
+    /// بررسی اینکه آیا صدا قطع است یا خیر
     pub fn is_muted(&self) -> bool {
         self.volume.is_none()
     }

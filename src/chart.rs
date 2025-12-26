@@ -1,8 +1,9 @@
-pub mod comparison;
-pub mod heatmap;
-pub mod indicator;
-pub mod kline;
-mod scale;
+// تعریف زیرماژول‌های مربوط به نمودار
+pub mod comparison; // مقایسه نمودارها
+pub mod heatmap;    // نقشه حرارتی (Heatmap)
+pub mod indicator;  // اندیکاتورها
+pub mod kline;      // کندل‌استیک‌ها (K-line)
+mod scale;          // مقیاس‌بندی محورها
 
 use crate::style;
 use crate::widget::multi_split::{DRAG_SIZE, MultiSplit};
@@ -21,68 +22,83 @@ use iced::{
     widget::{button, center, column, container, mouse_area, row, rule, text},
 };
 
-const ZOOM_SENSITIVITY: f32 = 30.0;
-const TEXT_SIZE: f32 = 12.0;
+const ZOOM_SENSITIVITY: f32 = 30.0; // حساسیت زوم
+const TEXT_SIZE: f32 = 12.0;        // اندازه متن
 
+/// انواع تعاملات کاربر با نمودار
 #[derive(Default, Debug, Clone, Copy)]
 pub enum Interaction {
     #[default]
-    None,
-    Zoomin {
+    None,                // بدون تعامل
+    Zoomin {             // در حال زوم کردن
         last_position: Point,
     },
-    Panning {
+    Panning {            // در حال جابجایی نمودار (Pan)
         translation: Vector,
         start: Point,
     },
-    Ruler {
+    Ruler {              // استفاده از خط‌کش برای اندازه‌گیری
         start: Option<Point>,
     },
 }
 
+/// مشخص می‌کند که کدام محور کلیک شده است
 #[derive(Debug, Clone, Copy)]
 pub enum AxisScaleClicked {
-    X,
-    Y,
+    X, // محور افقی (زمان)
+    Y, // محور عمودی (قیمت)
 }
 
+/// پیام‌های مربوط به رویدادهای نمودار
 #[derive(Debug, Clone, Copy)]
 pub enum Message {
-    Translated(Vector),
-    Scaled(f32, Vector),
-    AutoscaleToggled,
-    CrosshairMoved,
-    YScaling(f32, f32, bool),
-    XScaling(f32, f32, bool),
-    BoundsChanged(Rectangle),
-    SplitDragged(usize, f32),
-    DoubleClick(AxisScaleClicked),
+    Translated(Vector),      // جابجایی نمودار
+    Scaled(f32, Vector),     // تغییر مقیاس (زوم)
+    AutoscaleToggled,        // تغییر وضعیت مقیاس خودکار
+    CrosshairMoved,          // جابجایی نشانگر (Crosshair)
+    YScaling(f32, f32, bool),// تغییر مقیاس محور Y
+    XScaling(f32, f32, bool),// تغییر مقیاس محور X
+    BoundsChanged(Rectangle),// تغییر محدوده‌ی نمایش
+    SplitDragged(usize, f32),// کشیدن جداکننده پنل‌ها
+    DoubleClick(AxisScaleClicked), // دو بار کلیک روی محورها
 }
 
+/// تریت اصلی برای انواع مختلف نمودارها
 pub trait Chart: PlotConstants + canvas::Program<Message> {
     type IndicatorKind: Indicator;
 
+    /// دریافت وضعیت فعلی نمایش
     fn state(&self) -> &ViewState;
 
+    /// دریافت وضعیت فعلی نمایش به صورت قابل تغییر
     fn mut_state(&mut self) -> &mut ViewState;
 
+    /// بی‌اعتبار کردن تمام کش‌ها برای رندر مجدد کامل
     fn invalidate_all(&mut self);
 
+    /// بی‌اعتبار کردن کش نشانگر (Crosshair)
     fn invalidate_crosshair(&mut self);
 
+    /// نمایش اندیکاتورهای فعال
     fn view_indicators(&'_ self, enabled: &[Self::IndicatorKind]) -> Vec<Element<'_, Message>>;
 
+    /// دریافت بازه زمانی قابل مشاهده
     fn visible_timerange(&self) -> Option<(u64, u64)>;
 
+    /// دریافت کلیدهای بازه‌های زمانی
     fn interval_keys(&self) -> Option<Vec<u64>>;
 
+    /// دریافت مختصات مقیاس‌بندی شده خودکار
     fn autoscaled_coords(&self) -> Vector;
 
+    /// بررسی اینکه آیا از مقیاس‌بندی خودکار "Fit to Visible" پشتیبانی می‌کند یا خیر
     fn supports_fit_autoscaling(&self) -> bool;
 
+    /// بررسی خالی بودن داده‌های نمودار
     fn is_empty(&self) -> bool;
 }
 
+/// مدیریت تعاملات بوم (Canvas) مانند کلیک، درگ و اسکرول
 fn canvas_interaction<T: Chart>(
     chart: &T,
     interaction: &mut Interaction,
@@ -90,6 +106,7 @@ fn canvas_interaction<T: Chart>(
     bounds: Rectangle,
     cursor: mouse::Cursor,
 ) -> Option<canvas::Action<Message>> {
+    // اگر ابعاد تغییر کرده باشد، پیام تغییر ابعاد ارسال می‌شود
     if chart.state().bounds != bounds {
         return Some(canvas::Action::publish(Message::BoundsChanged(bounds)));
     }
@@ -97,6 +114,7 @@ fn canvas_interaction<T: Chart>(
     let shrunken_bounds = bounds.shrink(DRAG_SIZE * 4.0);
     let cursor_position = cursor.position_in(shrunken_bounds);
 
+    // بازنشانی تعامل در صورت رها کردن دکمه موس
     if let Event::Mouse(mouse::Event::ButtonReleased(_)) = event {
         match interaction {
             Interaction::Panning { .. } | Interaction::Zoomin { .. } => {
@@ -106,6 +124,7 @@ fn canvas_interaction<T: Chart>(
         }
     }
 
+    // بازنشانی خط‌کش اگر موس از محدوده خارج شود
     if let Interaction::Ruler { .. } = interaction
         && cursor_position.is_none()
     {
@@ -117,6 +136,7 @@ fn canvas_interaction<T: Chart>(
             let state = chart.state();
 
             match mouse_event {
+                // فشرده شدن دکمه موس
                 mouse::Event::ButtonPressed(button) => {
                     let cursor_in_bounds = cursor_position?;
 
@@ -125,12 +145,14 @@ fn canvas_interaction<T: Chart>(
                             Interaction::None
                             | Interaction::Panning { .. }
                             | Interaction::Zoomin { .. } => {
+                                // شروع جابجایی (Panning)
                                 *interaction = Interaction::Panning {
                                     translation: state.translation,
                                     start: cursor_in_bounds,
                                 };
                             }
                             Interaction::Ruler { start } if start.is_none() => {
+                                // شروع اندازه‌گیری با خط‌کش
                                 *interaction = Interaction::Ruler {
                                     start: Some(cursor_in_bounds),
                                 };
@@ -142,6 +164,7 @@ fn canvas_interaction<T: Chart>(
                     }
                     Some(canvas::Action::request_redraw().and_capture())
                 }
+                // حرکت موس
                 mouse::Event::CursorMoved { .. } => match *interaction {
                     Interaction::Panning { translation, start } => {
                         let cursor_in_bounds = cursor_position?;
@@ -155,6 +178,7 @@ fn canvas_interaction<T: Chart>(
                     }
                     _ => None,
                 },
+                // اسکرول کردن (زوم)
                 mouse::Event::WheelScrolled { delta } => {
                     cursor_position?;
 
@@ -174,6 +198,7 @@ fn canvas_interaction<T: Chart>(
                         | mouse::ScrollDelta::Pixels { y, .. } => y,
                     };
 
+                    // مدیریت زوم در حالت FitToVisible
                     if let Some(Autoscale::FitToVisible) = state.layout.autoscale {
                         return Some(
                             canvas::Action::publish(Message::XScaling(
@@ -185,6 +210,7 @@ fn canvas_interaction<T: Chart>(
                         );
                     }
 
+                    // بررسی نیاز به تغییر عرض سلول‌ها (کندل‌ها)
                     let should_adjust_cell_width = match (y.signum(), state.scaling) {
                         (-1.0, scaling)
                             if scaling == max_scaling && state.cell_width > default_cell_width =>
@@ -220,7 +246,7 @@ fn canvas_interaction<T: Chart>(
                         );
                     }
 
-                    // normal scaling cases
+                    // موارد عادی تغییر مقیاس (زوم)
                     if (*y < 0.0 && state.scaling > min_scaling)
                         || (*y > 0.0 && state.scaling < max_scaling)
                     {
@@ -252,14 +278,17 @@ fn canvas_interaction<T: Chart>(
                 _ => None,
             }
         }
+        // رویدادهای کیبورد
         Event::Keyboard(keyboard_event) => {
             cursor_position?;
             match keyboard_event {
                 iced::keyboard::Event::KeyPressed { key, .. } => match key.as_ref() {
+                    // فعال کردن خط‌کش با نگه داشتن Shift
                     keyboard::Key::Named(keyboard::key::Named::Shift) => {
                         *interaction = Interaction::Ruler { start: None };
                         Some(canvas::Action::request_redraw().and_capture())
                     }
+                    // لغو تعامل با Escape
                     keyboard::Key::Named(keyboard::key::Named::Escape) => {
                         *interaction = Interaction::None;
                         Some(canvas::Action::request_redraw().and_capture())
@@ -273,11 +302,13 @@ fn canvas_interaction<T: Chart>(
     }
 }
 
+/// اکشن‌های خروجی از به‌روزرسانی نمودار
 pub enum Action {
-    ErrorOccurred(data::InternalError),
-    RequestFetch(FetchRequests),
+    ErrorOccurred(data::InternalError), // وقوع خطا
+    RequestFetch(FetchRequests),        // درخواست دریافت داده‌های جدید
 }
 
+/// به‌روزرسانی وضعیت نمودار بر اساس پیام‌های دریافتی
 pub fn update<T: Chart>(chart: &mut T, message: &Message) {
     match message {
         Message::DoubleClick(scale) => {
@@ -288,10 +319,12 @@ pub fn update<T: Chart>(chart: &mut T, message: &Message) {
             let state = chart.mut_state();
 
             match scale {
+                // بازنشانی محور X با دو بار کلیک
                 AxisScaleClicked::X => {
                     state.cell_width = default_chart_width;
                     state.translation = autoscaled_coords;
                 }
+                // بازنشانی محور Y با دو بار کلیک
                 AxisScaleClicked::Y => {
                     if supports_fit_autoscaling {
                         state.layout.autoscale = Some(Autoscale::FitToVisible);
@@ -302,6 +335,7 @@ pub fn update<T: Chart>(chart: &mut T, message: &Message) {
                 }
             }
         }
+        // اعمال جابجایی نمودار
         Message::Translated(translation) => {
             let state = chart.mut_state();
 
@@ -312,6 +346,7 @@ pub fn update<T: Chart>(chart: &mut T, message: &Message) {
                 state.layout.autoscale = None;
             }
         }
+        // اعمال تغییر مقیاس (زوم)
         Message::Scaled(scaling, translation) => {
             let state = chart.mut_state();
             state.scaling = *scaling;
@@ -319,6 +354,7 @@ pub fn update<T: Chart>(chart: &mut T, message: &Message) {
 
             state.layout.autoscale = None;
         }
+        // تغییر وضعیت مقیاس‌بندی خودکار
         Message::AutoscaleToggled => {
             let supports_fit_autoscaling = chart.supports_fit_autoscaling();
             let state = chart.mut_state();
@@ -490,17 +526,20 @@ pub fn update<T: Chart>(chart: &mut T, message: &Message) {
     chart.invalidate_all();
 }
 
+/// رندر کردن نمای نمودار
 pub fn view<'a, T: Chart>(
     chart: &'a T,
     indicators: &'a [T::IndicatorKind],
     timezone: data::UserTimezone,
 ) -> Element<'a, Message> {
+    // اگر داده‌ای وجود ندارد، پیام انتظار نمایش داده می‌شود
     if chart.is_empty() {
         return center(text("Waiting for data...").size(16)).into();
     }
 
     let state = chart.state();
 
+    // ایجاد برچسب‌های محور X (زمان)
     let axis_labels_x = Canvas::new(AxisLabelsX {
         labels_cache: &state.cache.x_labels,
         scaling: state.scaling,
@@ -516,6 +555,7 @@ pub fn view<'a, T: Chart>(
     .width(Length::Fill)
     .height(Length::Fill);
 
+    // دکمه‌های کنترلی (مانند دکمه مقیاس‌بندی خودکار)
     let buttons = {
         let (autoscale_btn_placeholder, autoscale_btn_tooltip) = match state.layout.autoscale {
             Some(Autoscale::CenterLatest) => (text("C"), Some("Center last price")),
@@ -547,6 +587,7 @@ pub fn view<'a, T: Chart>(
 
     let y_labels_width = state.y_labels_width();
 
+    // محتوای اصلی شامل نمودار و محور Y
     let content = {
         let axis_labels_y = Canvas::new(AxisLabelsY {
             labels_cache: &state.cache.y_labels,
@@ -582,6 +623,7 @@ pub fn view<'a, T: Chart>(
         if indicators.is_empty() {
             main_chart
         } else {
+            // اگر اندیکاتور وجود دارد، از پنل‌های چندگانه استفاده می‌شود
             let panels = std::iter::once(main_chart)
                 .chain(indicators)
                 .collect::<Vec<_>>();
@@ -593,6 +635,7 @@ pub fn view<'a, T: Chart>(
         }
     };
 
+    // ترکیب نهایی بخش‌های مختلف نمودار
     column![
         content,
         rule::horizontal(1).style(style::split_ruler),
@@ -611,22 +654,24 @@ pub fn view<'a, T: Chart>(
     .into()
 }
 
+/// ثابت‌های مربوط به رسم نمودار
 pub trait PlotConstants {
-    fn min_scaling(&self) -> f32;
-    fn max_scaling(&self) -> f32;
-    fn max_cell_width(&self) -> f32;
-    fn min_cell_width(&self) -> f32;
-    fn max_cell_height(&self) -> f32;
-    fn min_cell_height(&self) -> f32;
-    fn default_cell_width(&self) -> f32;
+    fn min_scaling(&self) -> f32;        // حداقل ضریب بزرگنمایی
+    fn max_scaling(&self) -> f32;        // حداکثر ضریب بزرگنمایی
+    fn max_cell_width(&self) -> f32;     // حداکثر عرض سلول
+    fn min_cell_width(&self) -> f32;     // حداقل عرض سلول
+    fn max_cell_height(&self) -> f32;    // حداکثر ارتفاع سلول
+    fn min_cell_height(&self) -> f32;    // حداقل ارتفاع سلول
+    fn default_cell_width(&self) -> f32; // عرض پیش‌فرض سلول
 }
 
+/// کش‌های مختلف برای بهینه‌سازی رندر
 #[derive(Default)]
 pub struct Caches {
-    main: Cache,
-    x_labels: Cache,
-    y_labels: Cache,
-    crosshair: Cache,
+    main: Cache,      // کش اصلی نمودار
+    x_labels: Cache,  // کش برچسب‌های محور X
+    y_labels: Cache,  // کش برچسب‌های محور Y
+    crosshair: Cache, // کش نشانگر (Crosshair)
 }
 
 impl Caches {
@@ -644,21 +689,22 @@ impl Caches {
     }
 }
 
+/// وضعیت فعلی نمایش نمودار
 pub struct ViewState {
-    cache: Caches,
-    bounds: Rectangle,
-    translation: Vector,
-    scaling: f32,
-    cell_width: f32,
-    cell_height: f32,
-    basis: Basis,
-    last_price: Option<PriceInfoLabel>,
-    base_price_y: Price,
-    latest_x: u64,
-    tick_size: PriceStep,
-    decimals: usize,
-    ticker_info: TickerInfo,
-    layout: ViewConfig,
+    cache: Caches,              // کش‌های رندر
+    bounds: Rectangle,          // محدوده نمودار
+    translation: Vector,        // میزان جابجایی (Pan)
+    scaling: f32,               // ضریب بزرگنمایی فعلی
+    cell_width: f32,            // عرض فعلی هر سلول (کندل)
+    cell_height: f32,           // ارتفاع فعلی هر سلول
+    basis: Basis,               // مبنای نمودار (زمان یا تیک)
+    last_price: Option<PriceInfoLabel>, // آخرین قیمت مشاهده شده
+    base_price_y: Price,        // قیمت پایه برای محور Y
+    latest_x: u64,              // آخرین مقدار محور X
+    tick_size: PriceStep,       // اندازه هر تیک قیمت
+    decimals: usize,            // تعداد ارقام اعشار قیمت
+    ticker_info: TickerInfo,    // اطلاعات نماد معاملاتی
+    layout: ViewConfig,         // تنظیمات چیدمان و نمایش
 }
 
 impl ViewState {
@@ -694,6 +740,7 @@ impl ViewState {
         10i64.pow(Price::PRICE_SCALE as u32)
     }
 
+    /// محاسبه محدوده قابل مشاهده نمودار
     fn visible_region(&self, size: Size) -> Rectangle {
         let width = size.width / self.scaling;
         let height = size.height / self.scaling;
@@ -706,6 +753,7 @@ impl ViewState {
         }
     }
 
+    /// بررسی اینکه آیا یک مقدار در محور X قابل مشاهده است یا خیر
     fn is_interval_x_visible(&self, interval_x: f32) -> bool {
         let region = self.visible_region(self.bounds.size());
 
@@ -736,6 +784,7 @@ impl ViewState {
         (highest, lowest)
     }
 
+    /// تبدیل مقدار محور X (زمان یا تیک) به مختصات پیکسلی
     fn interval_to_x(&self, value: u64) -> f32 {
         match self.basis {
             Basis::Time(timeframe) => {
@@ -749,6 +798,7 @@ impl ViewState {
         }
     }
 
+    /// تبدیل مختصات پیکسلی X به مقدار محور (زمان یا تیک)
     fn x_to_interval(&self, x: f32) -> u64 {
         match self.basis {
             Basis::Time(timeframe) => {
@@ -769,6 +819,7 @@ impl ViewState {
         }
     }
 
+    /// تبدیل قیمت به مختصات پیکسلی Y
     fn price_to_y(&self, price: Price) -> f32 {
         if self.tick_size.units == 0 {
             let one = Self::price_unit() as f32;
@@ -781,6 +832,7 @@ impl ViewState {
         ticks * self.cell_height
     }
 
+    /// تبدیل مختصات پیکسلی Y به قیمت
     fn y_to_price(&self, y: f32) -> Price {
         if self.tick_size.units == 0 {
             let one = Self::price_unit() as f32;
@@ -793,6 +845,7 @@ impl ViewState {
         Price::from_units(self.base_price_y.units - delta_units)
     }
 
+    /// رسم نشانگر (Crosshair) و خط‌کش (Ruler) روی نمودار
     fn draw_crosshair(
         &self,
         frame: &mut Frame,
@@ -1036,6 +1089,7 @@ impl ViewState {
         }
     }
 
+    /// رسم خط آخرین قیمت روی نمودار
     fn draw_last_price_line(
         &self,
         frame: &mut canvas::Frame,
@@ -1068,6 +1122,7 @@ impl ViewState {
         }
     }
 
+    /// دریافت تنظیمات فعلی چیدمان
     fn layout(&self) -> ViewConfig {
         let layout = &self.layout;
         ViewConfig {
@@ -1076,6 +1131,7 @@ impl ViewState {
         }
     }
 
+    /// محاسبه عرض مورد نیاز برای برچسب‌های محور Y
     fn y_labels_width(&self) -> Length {
         let precision = self.ticker_info.min_ticksize;
 
@@ -1085,6 +1141,7 @@ impl ViewState {
         Length::Fixed(width.ceil())
     }
 
+    /// قفل کردن (Snap) مختصات X موس به نزدیک‌ترین ایندکس (زمان یا تیک)
     fn snap_x_to_index(&self, x: f32, bounds: Size, region: Rectangle) -> (u64, f32) {
         let x_ratio = x / bounds.width;
 
@@ -1127,6 +1184,7 @@ impl ViewState {
     }
 }
 
+/// ارسال درخواست دریافت داده‌های جدید (Fetch)
 fn request_fetch(handler: &mut RequestHandler, range: FetchRange) -> Option<Action> {
     match handler.add_request(range) {
         Ok(Some(req_id)) => {
@@ -1147,6 +1205,7 @@ fn request_fetch(handler: &mut RequestHandler, range: FetchRange) -> Option<Acti
     }
 }
 
+/// رسم یک نوار حجم (Volume Bar) که شامل مقادیر خرید و فروش است
 fn draw_volume_bar(
     frame: &mut canvas::Frame,
     start_x: f32,
