@@ -1,6 +1,6 @@
 [package]
 name = "flowsurface-exchange"
-description = "Adapters for data providers/crypto exchanges to work with Flowsurface"
+description = "Adapters for data providers/crypto exchanges to work with Flowsurface" # آداپتورهای تامین‌کنندگان داده و صرافی‌های ارز دیجیتال برای کار با Flowsurface
 version = "0.1.0"
 license = "MIT"
 edition.workspace = true
@@ -8,26 +8,26 @@ repository.workspace = true
 homepage.workspace = true
 
 [dependencies]
-iced_futures.workspace = true
-chrono.workspace = true
-serde.workspace = true
-serde_json.workspace = true
-log.workspace = true
-thiserror.workspace = true
-uuid.workspace = true
-enum-map.workspace = true
-rustc-hash.workspace = true
+iced_futures.workspace = true # ابزارهای مدیریت آینده‌ها (Futures) در کتابخانه Iced
+chrono.workspace = true       # مدیریت تاریخ و زمان
+serde.workspace = true        # سریال‌سازی و دی‌سریال‌سازی داده‌ها
+serde_json.workspace = true   # کار با فرمت JSON
+log.workspace = true          # سیستم لاگ‌گذاری
+thiserror.workspace = true    # مدیریت خطاها
+uuid.workspace = true         # تولید شناسه‌های منحصربه‌فرد
+enum-map.workspace = true     # نگاشت انوم‌ها
+rustc-hash.workspace = true   # توابع هش سریع
 
-tokio = { version = "1.43", default-features = false, features = ["rt", "macros"] }
-reqwest = { version = "0.12.9", default-features = false, features = ["json", "brotli", "rustls-tls"] }
-bytes = "1.8.0"
-sonic-rs = { version = "0.5.0", default-features = false }
-fastwebsockets = { version = "0.9.0", default-features = false, features = ["upgrade"] }
+tokio = { version = "1.43", default-features = false, features = ["rt", "macros"] } # ران‌تایم ناهمگام
+reqwest = { version = "0.12.9", default-features = false, features = ["json", "brotli", "rustls-tls"] } # کلاینت HTTP
+bytes = "1.8.0" # مدیریت بافر بایت‌ها
+sonic-rs = { version = "0.5.0", default-features = false } # پردازش سریع JSON
+fastwebsockets = { version = "0.9.0", default-features = false, features = ["upgrade"] } # پیاده‌سازی سریع وب‌سوکت
 http-body-util = "0.1.2"
-hyper = { version = "1", default-features = false, features = ["http1", "client"] }
+hyper = { version = "1", default-features = false, features = ["http1", "client"] } # کلاینت HTTP سطح پایین
 hyper-util = { version = "0.1.10", default-features = false }
-tokio-rustls = "0.24.1"
-webpki-roots = "0.23.1"
-zip = "2.3.0"
-csv = "1.3.1"
-smallvec = "1.15.1"
+tokio-rustls = "0.24.1" # پشتیبانی از TLS برای Tokio
+webpki-roots = "0.23.1" # گواهی‌های ریشه برای تایید TLS
+zip = "2.3.0"           # کار با فایل‌های فشرده ZIP
+csv = "1.3.1"           # کار با فایل‌های CSV
+smallvec = "1.15.1"     # بهینه‌سازی تخصیص حافظه برای لیست‌های کوچک

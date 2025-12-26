@@ -79,6 +79,7 @@ const LIMITER_BUFFER_PCT: f32 = 0.05;
 static HYPERLIQUID_LIMITER: LazyLock<Mutex<HyperliquidLimiter>> =
     LazyLock::new(|| Mutex::new(HyperliquidLimiter::new(LIMIT, REFILL_RATE)));
 
+/// محدودکننده نرخ اختصاصی برای هایپرلیکویید
 pub struct HyperliquidLimiter {
     bucket: limiter::FixedWindowBucket,
 }
@@ -123,10 +124,11 @@ struct HyperliquidSpotPair {
     index: u32,
 }
 
+/// ساختار داده‌های جفت‌ارزهای اسپات هایپرلیکویید
 #[derive(Debug, Deserialize)]
 struct HyperliquidSpotMeta {
-    tokens: Vec<HyperliquidAssetInfo>,
-    universe: Vec<HyperliquidSpotPair>,
+    tokens: Vec<HyperliquidAssetInfo>,   // اطلاعات توکن‌ها
+    universe: Vec<HyperliquidSpotPair>, // لیست جفت‌ارزها
 }
 
 // Unified asset context structure for price/volume data
@@ -170,12 +172,13 @@ struct HyperliquidKline {
     trade_count: u64,
 }
 
+/// ساختار داده‌های عمق بازار هایپرلیکویید
 #[derive(Debug, Deserialize)]
 #[allow(dead_code)]
 struct HyperliquidDepth {
-    coin: String,
-    levels: [Vec<HyperliquidLevel>; 2], // [bids, asks]
-    time: u64,
+    coin: String,                       // نام ارز
+    levels: [Vec<HyperliquidLevel>; 2], // [خریدها، فروش‌ها]
+    time: u64,                          // زمان بروزرسانی
 }
 
 #[derive(Debug, Deserialize)]
@@ -213,6 +216,7 @@ enum StreamData {
     Kline(HyperliquidKline),
 }
 
+/// دریافت اطلاعات نمادها (گام قیمت و ...) از هایپرلیکویید
 pub async fn fetch_ticksize(
     market: MarketKind,
 ) -> Result<HashMap<Ticker, Option<TickerInfo>>, AdapterError> {
@@ -571,6 +575,7 @@ fn compute_tick_size(price: f32, sz_decimals: u32, market: MarketKind) -> f32 {
     }
 }
 
+/// دریافت قیمت‌های فعلی و آمار ۲۴ ساعته نمادها از هایپرلیکویید
 pub async fn fetch_ticker_prices(
     market: MarketKind,
 ) -> Result<HashMap<Ticker, TickerStats>, AdapterError> {
@@ -754,6 +759,7 @@ fn find_asset_stats(
     Ok(None)
 }
 
+/// دریافت داده‌های کندل (Kline) از طریق API هایپرلیکویید
 pub async fn fetch_klines(
     ticker_info: TickerInfo,
     timeframe: Timeframe,
@@ -864,6 +870,7 @@ fn parse_websocket_message(payload: &[u8]) -> Result<StreamData, AdapterError> {
     }
 }
 
+/// برقراری اتصال به جریان داده‌های بازار (عمق و معاملات) هایپرلیکویید
 pub fn connect_market_stream(
     ticker_info: TickerInfo,
     tick_multiplier: Option<TickMultiplier>,
@@ -1100,6 +1107,7 @@ pub fn connect_market_stream(
     })
 }
 
+/// برقراری اتصال به جریان داده‌های کندل (Kline) هایپرلیکویید
 pub fn connect_kline_stream(
     streams: Vec<(TickerInfo, Timeframe)>,
     _market: MarketKind,

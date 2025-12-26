@@ -14,12 +14,14 @@ use tokio_rustls::{
     rustls::{ClientConfig, OwnedTrustAnchor},
 };
 
+/// وضعیت اتصال وب‌سوکت
 #[allow(clippy::large_enum_variant)]
 pub enum State {
-    Disconnected,
-    Connected(FragmentCollector<TokioIo<Upgraded>>),
+    Disconnected,                                   // قطع شده
+    Connected(FragmentCollector<TokioIo<Upgraded>>), // متصل شده
 }
 
+/// برقراری اتصال وب‌سوکت امن (WSS)
 pub async fn connect_ws(
     domain: &str,
     url: &str,
@@ -27,12 +29,16 @@ pub async fn connect_ws(
     fastwebsockets::FragmentCollector<hyper_util::rt::TokioIo<hyper::upgrade::Upgraded>>,
     AdapterError,
 > {
+    // ۱. راه‌اندازی اتصال TCP
     let tcp_stream = setup_tcp(domain).await?;
+    // ۲. ارتقا به لایه امن TLS
     let tls_stream = upgrade_to_tls(domain, tcp_stream).await?;
 
+    // ۳. انجام دست‌دهی (Handshake) وب‌سوکت
     upgrade_to_websocket(domain, tls_stream, url).await
 }
 
+/// ساختار کمکی برای اجرای کارهای ناهمگام در پس‌زمینه
 struct SpawnExecutor;
 
 impl<Fut> hyper::rt::Executor<Fut> for SpawnExecutor
@@ -45,6 +51,7 @@ where
     }
 }
 
+/// راه‌اندازی اتصال TCP به دامنه مورد نظر روی پورت ۴۴۳
 async fn setup_tcp(domain: &str) -> Result<TcpStream, AdapterError> {
     let addr = format!("{domain}:443");
     TcpStream::connect(&addr)
@@ -52,6 +59,7 @@ async fn setup_tcp(domain: &str) -> Result<TcpStream, AdapterError> {
         .map_err(|e| AdapterError::WebsocketError(e.to_string()))
 }
 
+/// ایجاد تنظیمات و کانکتور TLS با استفاده از گواهی‌های ریشه سیستم
 fn tls_connector() -> Result<TlsConnector, AdapterError> {
     let mut root_store = tokio_rustls::rustls::RootCertStore::empty();
 
@@ -71,6 +79,7 @@ fn tls_connector() -> Result<TlsConnector, AdapterError> {
     Ok(TlsConnector::from(std::sync::Arc::new(config)))
 }
 
+/// ارتقای اتصال TCP به یک اتصال امن TLS
 async fn upgrade_to_tls(
     domain: &str,
     tcp_stream: TcpStream,
@@ -85,6 +94,7 @@ async fn upgrade_to_tls(
         .map_err(|e| AdapterError::WebsocketError(e.to_string()))
 }
 
+/// انجام دست‌دهی وب‌سوکت روی لایه امن TLS
 async fn upgrade_to_websocket(
     domain: &str,
     tls_stream: tokio_rustls::client::TlsStream<TcpStream>,

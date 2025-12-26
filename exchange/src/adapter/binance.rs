@@ -42,6 +42,7 @@ const PERP_LIMIT: usize = 2400;
 const REFILL_RATE: Duration = Duration::from_secs(60);
 const LIMITER_BUFFER_PCT: f32 = 0.03;
 
+/// محدودکننده نرخ اختصاصی برای بایننس
 pub struct BinanceLimiter {
     bucket: limiter::DynamicBucket,
 }
@@ -102,16 +103,17 @@ fn ws_domain_from_market_type(market: MarketKind) -> &'static str {
     }
 }
 
+/// ساختار داده‌های عمق بازار دریافتی برای فیوچرز بایننس
 #[derive(Deserialize, Clone)]
 pub struct FetchedPerpDepth {
     #[serde(rename = "lastUpdateId")]
-    update_id: u64,
+    update_id: u64, // شناسه آخرین بروزرسانی
     #[serde(rename = "T")]
-    time: u64,
+    time: u64,      // زمان بروزرسانی
     #[serde(rename = "bids")]
-    bids: Vec<DeOrder>,
+    bids: Vec<DeOrder>, // لیست خرید
     #[serde(rename = "asks")]
-    asks: Vec<DeOrder>,
+    asks: Vec<DeOrder>, // لیست فروش
 }
 
 #[derive(Deserialize, Clone)]
@@ -198,10 +200,11 @@ struct PerpDepth {
     asks: Vec<DeOrder>,
 }
 
+/// انواع داده‌های دریافتی از جریان وب‌سوکت بایننس
 enum StreamData {
-    Trade(SonicTrade),
-    Depth(SonicDepth),
-    Kline(Ticker, SonicKline),
+    Trade(SonicTrade),         // داده معامله
+    Depth(SonicDepth),         // داده عمق بازار
+    Kline(Ticker, SonicKline), // داده کندل
 }
 
 enum StreamWrapper {
@@ -329,6 +332,7 @@ async fn try_resync(
 }
 
 #[allow(unused_assignments)]
+/// برقراری اتصال به جریان داده‌های بازار (عمق و معاملات) بایننس
 pub fn connect_market_stream(
     ticker_info: TickerInfo,
     push_freq: PushFrequency,
@@ -601,6 +605,7 @@ pub fn connect_market_stream(
     })
 }
 
+/// برقراری اتصال به جریان داده‌های کندل (Kline) بایننس
 pub fn connect_kline_stream(
     streams: Vec<(TickerInfo, Timeframe)>,
     market: MarketKind,
@@ -920,6 +925,7 @@ impl From<FetchedKlines> for Kline {
     }
 }
 
+/// دریافت داده‌های کندل (Kline) از طریق API بایننس
 pub async fn fetch_klines(
     ticker_info: TickerInfo,
     timeframe: Timeframe,
@@ -1019,6 +1025,7 @@ pub async fn fetch_klines(
     Ok(klines)
 }
 
+/// دریافت اطلاعات نمادها (گام قیمت و ...) از بایننس
 pub async fn fetch_ticksize(
     market: MarketKind,
 ) -> Result<HashMap<Ticker, Option<TickerInfo>>, AdapterError> {
@@ -1114,6 +1121,7 @@ pub async fn fetch_ticksize(
     Ok(ticker_info_map)
 }
 
+/// دریافت قیمت‌های فعلی و آمار ۲۴ ساعته نمادها از بایننس
 pub async fn fetch_ticker_prices(
     market: MarketKind,
 ) -> Result<HashMap<Ticker, TickerStats>, AdapterError> {
@@ -1205,6 +1213,7 @@ const THIRTY_DAYS_MS: u64 = 30 * 24 * 60 * 60 * 1000; // 30 days in milliseconds
 /// # Panics
 ///
 /// Will panic if the `period` is not one of the supported timeframes for open interest
+/// دریافت تاریخچه بهره باز (Open Interest) از بایننس
 pub async fn fetch_historical_oi(
     ticker: Ticker,
     range: Option<(u64, u64)>,
@@ -1302,6 +1311,7 @@ pub async fn fetch_historical_oi(
     Ok(open_interest)
 }
 
+/// دریافت معاملات (Trades) از بایننس (با اولویت داده‌های محلی و سپس API)
 pub async fn fetch_trades(
     ticker_info: TickerInfo,
     from_time: u64,

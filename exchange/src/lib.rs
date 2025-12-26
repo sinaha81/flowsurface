@@ -15,13 +15,13 @@ use serde_json::Value;
 use std::sync::atomic::{AtomicU8, Ordering};
 use std::{fmt, hash::Hash};
 
-/// Unit for displaying volume/quantity size values.
+/// واحد نمایش مقادیر حجم/تعداد
 ///
-/// - `Base`: Display in base asset units (e.g., BTC for BTCUSDT)
-/// - `Quote`: Display in quote currency value (e.g., USD/USDT equivalent)
+/// - `Base`: نمایش بر اساس واحد ارز پایه (مثلاً BTC برای BTCUSDT)
+/// - `Quote`: نمایش بر اساس ارزش ارز کوت (مثلاً معادل USD/USDT)
 ///
-/// Note: Only applies to linear perpetuals and spot markets.
-/// Inverse perpetuals always display in USD regardless of this setting.
+/// نکته: فقط برای بازارهای فیوچرز خطی (Linear Perpetual) و اسپات (Spot) اعمال می‌شود.
+/// بازارهای فیوچرز معکوس (Inverse Perpetual) همیشه بر اساس USD نمایش داده می‌شوند.
 #[repr(u8)]
 #[derive(Default, Copy, Clone, Debug, Eq, PartialEq, Hash, Deserialize, Serialize)]
 pub enum SizeUnit {
@@ -44,16 +44,16 @@ pub fn volume_size_unit() -> SizeUnit {
     }
 }
 
-/// Desired frequency for orderbook depth updates.
+/// فرکانس مورد نظر برای بروزرسانی‌های عمق دفتر سفارش (Orderbook Depth)
 ///
-/// Maps user-selected update intervals to exchange-specific depth levels.
-/// Used for some exchanges that determine push frequency based on subscribed depth level
-/// (e.g., Bybit pushes every 300ms for 1000-level depth, 100ms for 200-level).
+/// فواصل زمانی انتخاب شده توسط کاربر را به سطوح عمق خاص هر صرافی نگاشت می‌کند.
+/// برای برخی صرافی‌ها که فرکانس ارسال را بر اساس سطح عمق اشتراک تعیین می‌کنند استفاده می‌شود
+/// (مثلاً Bybit برای عمق ۱۰۰۰ سطح هر ۳۰۰ میلی‌ثانیه و برای ۲۰۰ سطح هر ۱۰۰ میلی‌ثانیه داده ارسال می‌کند).
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Hash, Deserialize, Serialize)]
 pub enum PushFrequency {
     #[default]
-    ServerDefault,
-    Custom(Timeframe),
+    ServerDefault, // پیش‌فرض سرور
+    Custom(Timeframe), // بازه زمانی سفارشی
 }
 
 impl std::fmt::Display for PushFrequency {
@@ -91,23 +91,24 @@ impl std::fmt::Display for Timeframe {
     }
 }
 
+/// بازه‌های زمانی مختلف (Timeframes)
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Deserialize, Serialize, PartialOrd, Ord)]
 pub enum Timeframe {
-    MS100,
-    MS200,
-    MS300,
-    MS500,
-    MS1000,
-    M1,
-    M3,
-    M5,
-    M15,
-    M30,
-    H1,
-    H2,
-    H4,
-    H12,
-    D1,
+    MS100,  // ۱۰۰ میلی‌ثانیه
+    MS200,  // ۲۰۰ میلی‌ثانیه
+    MS300,  // ۳۰۰ میلی‌ثانیه
+    MS500,  // ۵۰۰ میلی‌ثانیه
+    MS1000, // ۱ ثانیه
+    M1,     // ۱ دقیقه
+    M3,     // ۳ دقیقه
+    M5,     // ۵ دقیقه
+    M15,    // ۱۵ دقیقه
+    M30,    // ۳۰ دقیقه
+    H1,     // ۱ ساعت
+    H2,     // ۲ ساعت
+    H4,     // ۴ ساعت
+    H12,    // ۱۲ ساعت
+    D1,     // ۱ روز
 }
 
 impl Timeframe {
@@ -189,11 +190,11 @@ impl fmt::Display for InvalidTimeframe {
 
 impl std::error::Error for InvalidTimeframe {}
 
-/// Serializable version of `(Exchange, Ticker)` tuples that is used for keys in maps
+/// نسخه قابل سریال‌سازی از جفت‌های (صرافی، نماد) که به عنوان کلید در نقشه‌ها استفاده می‌شود
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct SerTicker {
-    pub exchange: Exchange,
-    pub ticker: Ticker,
+    pub exchange: Exchange, // صرافی
+    pub ticker: Ticker,     // نماد معاملاتی
 }
 
 impl SerTicker {
@@ -288,12 +289,13 @@ impl fmt::Display for SerTicker {
     }
 }
 
+/// ساختار نگهدارنده اطلاعات نماد معاملاتی (Ticker)
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Ticker {
-    bytes: [u8; Ticker::MAX_LEN as usize],
-    pub exchange: Exchange,
-    // Optional display symbol for UI, mainly used for Hyperliquid spot markets
-    // to show "HYPEUSDC" instead of "@107"
+    bytes: [u8; Ticker::MAX_LEN as usize], // بایت‌های نام نماد
+    pub exchange: Exchange,               // صرافی مربوطه
+    // نماد نمایشی اختیاری برای رابط کاربری، عمدتاً برای بازارهای اسپات Hyperliquid استفاده می‌شود
+    // تا به جای "@107" عبارت "HYPEUSDC" را نشان دهد
     display_bytes: [u8; Ticker::MAX_LEN as usize],
     has_display_symbol: bool,
 }
@@ -546,13 +548,14 @@ pub enum StreamPairKind {
     MultiSource(Vec<TickerInfo>),
 }
 
+/// اطلاعات تکمیلی یک نماد معاملاتی شامل گام قیمت و مقدار
 #[derive(Debug, Clone, Copy, PartialEq, Deserialize, Serialize, Hash, Eq)]
 pub struct TickerInfo {
     pub ticker: Ticker,
     #[serde(rename = "tickSize")]
-    pub min_ticksize: MinTicksize,
-    pub min_qty: MinQtySize,
-    pub contract_size: Option<ContractSize>,
+    pub min_ticksize: MinTicksize, // حداقل گام تغییر قیمت
+    pub min_qty: MinQtySize,       // حداقل مقدار معامله
+    pub contract_size: Option<ContractSize>, // اندازه قرارداد (برای فیوچرز)
 }
 
 impl TickerInfo {
@@ -584,23 +587,25 @@ impl TickerInfo {
     }
 }
 
+/// اطلاعات یک معامله انجام شده
 #[derive(Debug, Clone, Copy, Deserialize)]
 pub struct Trade {
-    pub time: u64,
+    pub time: u64,     // زمان معامله
     #[serde(deserialize_with = "bool_from_int")]
-    pub is_sell: bool,
-    pub price: Price,
-    pub qty: f32,
+    pub is_sell: bool, // آیا معامله فروش است؟
+    pub price: Price,  // قیمت معامله
+    pub qty: f32,      // مقدار معامله
 }
 
+/// اطلاعات یک کندل (Kline)
 #[derive(Debug, Clone, Copy)]
 pub struct Kline {
-    pub time: u64,
-    pub open: Price,
-    pub high: Price,
-    pub low: Price,
-    pub close: Price,
-    pub volume: (f32, f32),
+    pub time: u64,          // زمان شروع کندل
+    pub open: Price,        // قیمت باز شدن
+    pub high: Price,        // بالاترین قیمت
+    pub low: Price,         // پایین‌ترین قیمت
+    pub close: Price,       // قیمت بسته شدن
+    pub volume: (f32, f32), // حجم (خرید، فروش)
 }
 
 impl Kline {
@@ -685,6 +690,7 @@ fn str_f32_parse(s: &str) -> f32 {
     })
 }
 
+/// ضریب گام قیمت (برای گروه‌بندی قیمت‌ها در نمودار)
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize, Hash)]
 pub struct TickMultiplier(pub u16);
 

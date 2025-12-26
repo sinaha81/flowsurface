@@ -6,10 +6,11 @@ use serde_json::Value;
 
 use std::{collections::BTreeMap, sync::Arc};
 
+/// ساختار کمکی برای دی‌سریال‌سازی یک سطح قیمتی در دفتر سفارش
 #[derive(Clone, Copy)]
 pub struct DeOrder {
-    pub price: f32,
-    pub qty: f32,
+    pub price: f32, // قیمت
+    pub qty: f32,   // مقدار
 }
 
 impl<'de> serde::Deserialize<'de> for DeOrder {
@@ -46,27 +47,31 @@ impl<'de> serde::Deserialize<'de> for DeOrder {
     }
 }
 
+/// ساختار داخلی برای نمایش یک سفارش با قیمت دقیق
 struct Order {
     price: Price,
     qty: f32,
 }
 
+/// داده‌های دریافتی مربوط به عمق بازار
 pub struct DepthPayload {
-    pub last_update_id: u64,
-    pub time: u64,
-    pub bids: Vec<DeOrder>,
-    pub asks: Vec<DeOrder>,
+    pub last_update_id: u64, // شناسه آخرین بروزرسانی
+    pub time: u64,           // زمان بروزرسانی
+    pub bids: Vec<DeOrder>,  // لیست قیمت‌های خرید
+    pub asks: Vec<DeOrder>,  // لیست قیمت‌های فروش
 }
 
+/// انواع بروزرسانی‌های عمق بازار
 pub enum DepthUpdate {
-    Snapshot(DepthPayload),
-    Diff(DepthPayload),
+    Snapshot(DepthPayload), // تصویر کامل از وضعیت فعلی (Snapshot)
+    Diff(DepthPayload),     // تغییرات نسبت به وضعیت قبلی (Delta/Diff)
 }
 
+/// ساختار نگهدارنده وضعیت فعلی دفتر سفارش
 #[derive(Clone, Default)]
 pub struct Depth {
-    pub bids: BTreeMap<Price, f32>,
-    pub asks: BTreeMap<Price, f32>,
+    pub bids: BTreeMap<Price, f32>, // دفتر سفارشات خرید (مرتب شده بر اساس قیمت)
+    pub asks: BTreeMap<Price, f32>, // دفتر سفارشات فروش (مرتب شده بر اساس قیمت)
 }
 
 impl std::fmt::Debug for Depth {
@@ -134,11 +139,12 @@ impl Depth {
     }
 }
 
+/// حافظه موقت محلی برای نگهداری و بروزرسانی عمق بازار یک نماد
 #[derive(Default)]
 pub struct LocalDepthCache {
-    pub last_update_id: u64,
-    pub time: u64,
-    pub depth: Arc<Depth>,
+    pub last_update_id: u64, // آخرین شناسه بروزرسانی اعمال شده
+    pub time: u64,           // زمان آخرین بروزرسانی
+    pub depth: Arc<Depth>,   // وضعیت فعلی عمق بازار (به صورت اشتراکی)
 }
 
 impl LocalDepthCache {
