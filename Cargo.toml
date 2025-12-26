@@ -1,37 +1,42 @@
+# پیکربندی پروژه FlowSurface
 [package]
 name = "flowsurface"
 version = "0.8.6"
 readme = "README.md"
 license = "GPL-3.0-or-later"
-description = "A native desktop charting platform for crypto markets"
+description = "A native desktop charting platform for crypto markets" # پلتفرم بومی دسکتاپ برای نمودارهای بازارهای کریپتو
 categories = ["finance", "visualization", "gui"]
 edition.workspace = true
 repository.workspace = true
 homepage.workspace = true
 
+# تنظیمات مشترک برای بسته‌های موجود در فضای کاری (Workspace)
 [workspace.package]
 edition = "2024"
 repository = "https://github.com/flowsurface-rs/flowsurface"
 homepage = "https://flowsurface.com"
 
+# تعریف اعضای فضای کاری
 [workspace]
 members = [ "data", "exchange"]
 
+# وابستگی‌های مشترک در کل فضای کاری
 [workspace.dependencies]
 iced_futures = { version = "0.14.0" }
 iced_core = { version = "0.14.0", features = ["serde"] }
-chrono = { version = "0.4.40", default-features = false, features = ["serde", "now", "clock"] }
-serde = { version = "1.0.219", default-features = false, features = ["derive"] }
+chrono = { version = "0.4.40", default-features = false, features = ["serde", "now", "clock"] } # مدیریت زمان و تاریخ
+serde = { version = "1.0.219", default-features = false, features = ["derive"] } # سریال‌سازی و دی‌سریال‌سازی داده‌ها
 serde_json = "1.0.140"
-log = "0.4.22"
-thiserror = "2.0.12"
-regex = "1.11.1"
-palette = "0.7.6"
+log = "0.4.22" # سیستم ثبت لاگ
+thiserror = "2.0.12" # مدیریت خطاها
+regex = "1.11.1" # عبارات باقاعده
+palette = "0.7.6" # مدیریت رنگ‌ها
 num-traits = "0.2.19"
 rustc-hash = "2.1.1"
 enum-map = "2.7.3"
-uuid = { version = "1.11.0", features = ["v4"] }
+uuid = { version = "1.11.0", features = ["v4"] } # تولید شناسه‌های منحصر به فرد
 
+# وابستگی‌های اصلی پروژه
 [dependencies]
 iced = { version = "0.14.0", default-features = false, features = [
     "wgpu",
@@ -43,7 +48,7 @@ iced = { version = "0.14.0", default-features = false, features = [
     "crisp",
     "x11",
     "wayland",
-] }
+] } # کتابخانه اصلی رابط کاربری (GUI)
 iced_core.workspace = true
 iced_futures.workspace = true
 chrono.workspace = true
@@ -56,11 +61,12 @@ palette.workspace = true
 num-traits.workspace = true
 rustc-hash.workspace = true
 enum-map.workspace = true
-fern = "0.7.1"
-rodio = { version = "0.20.1", default-features = false, features = [ "wav" ]}
+fern = "0.7.1" # پیکربندی سیستم لاگ‌گیری
+rodio = { version = "0.20.1", default-features = false, features = [ "wav" ]} # پخش صدا
 
+# ماژول‌های داخلی پروژه
 exchange = { version = "0.1.0", path = "exchange", package = "flowsurface-exchange" }
 data = { version = "0.1.0", path = "data", package = "flowsurface-data" }
 
 [features]
-debug = ["iced/hot"]
+debug = ["iced/hot"] # قابلیت دیباگ و بارگذاری مجدد سریع رابط کاربری
