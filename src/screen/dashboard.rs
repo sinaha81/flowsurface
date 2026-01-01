@@ -808,6 +808,14 @@ impl Dashboard {
             });
     }
 
+    pub fn open_indicators_modal(&mut self, main_window: window::Id) {
+        if let Some((window, pane)) = self.focus {
+            if let Some(state) = self.get_mut_pane(main_window, window, pane) {
+                state.modal = Some(crate::modal::pane::Modal::Indicators);
+            }
+        }
+    }
+
     pub fn distribute_fetched_data(
         &mut self,
         main_window: window::Id,

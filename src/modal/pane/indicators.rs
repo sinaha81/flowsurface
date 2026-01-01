@@ -19,7 +19,12 @@ where
 {
     let content_allows_dragging = matches!(state.content, pane::Content::Kline { .. });
     let content_row = if let Some(market) = market_type {
-        content_row(pane, selected, market, content_allows_dragging)
+        let modular_selected = match &state.content {
+            pane::Content::Kline { modular_indicators, .. } => modular_indicators.as_slice(),
+            pane::Content::Heatmap { modular_indicators, .. } => modular_indicators.as_slice(),
+            _ => &[],
+        };
+        content_row(pane, selected, modular_selected, market, content_allows_dragging)
     } else {
         column![].spacing(4).into()
     };
@@ -111,6 +116,7 @@ where
 fn content_row<'a, I>(
     pane: pane_grid::Pane,
     selected: &[I],
+    modular_selected: &[String],
     market: exchange::adapter::MarketKind,
     allows_drag: bool,
 ) -> Element<'a, Message>
@@ -144,9 +150,52 @@ where
         col = col.push(avail);
     }
 
+    let modular_list = modular_list(pane, modular_selected);
+    col = col.push(modular_list);
+
     column![
         container(text("Indicators").size(14)).padding(padding::bottom(8)),
         col.spacing(4)
+    ]
+    .spacing(4)
+    .into()
+}
+
+fn modular_list<'a>(
+    pane: pane_grid::Pane,
+    selected: &[String],
+) -> Element<'a, Message> {
+    let available = ["VWAP", "CVD"];
+    
+    let elements: Vec<Element<_>> = available
+        .iter()
+        .map(|&name| {
+            let is_selected = selected.contains(&name.to_string());
+            let content = if is_selected {
+                row![
+                    text(name),
+                    space::horizontal(),
+                    container(icon_text(Icon::Checkmark, 12)),
+                ]
+                .width(Length::Fill)
+            } else {
+                row![text(name)].width(Length::Fill)
+            };
+
+            button(content)
+                .on_press(Message::PaneEvent(
+                    pane,
+                    pane::Event::ToggleIndicator(UiIndicator::Modular(name.to_string())),
+                ))
+                .width(Length::Fill)
+                .style(move |theme, status| style::button::modifier(theme, status, is_selected))
+                .into()
+        })
+        .collect();
+
+    column![
+        container(text("Modular").size(14)).padding(padding::top(8).bottom(8)),
+        iced::widget::Column::with_children(elements).spacing(4)
     ]
     .spacing(4)
     .into()

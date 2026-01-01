@@ -4,6 +4,7 @@ use iced::{
 };
 
 pub mod indicators;
+pub mod indicator_settings;
 pub mod mini_tickers_list;
 pub mod settings;
 pub mod stream;
@@ -12,7 +13,8 @@ pub mod stream;
 pub enum Modal {
     StreamModifier(super::stream::Modifier),
     MiniTickersList(mini_tickers_list::MiniPanel),
-    Settings,
+    Settings(settings::State),
+    IndicatorSettings(usize),
     Indicators,
     LinkGroup,
     Controls,

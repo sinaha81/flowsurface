@@ -1,5 +1,5 @@
 use crate::{
-    chart::{self, comparison::ComparisonChart, heatmap::HeatmapChart, kline::KlineChart},
+    chart::{self, Chart, comparison::ComparisonChart, heatmap::HeatmapChart, kline::KlineChart},
     modal::{
         self, ModifierKind,
         pane::{
@@ -94,6 +94,10 @@ pub enum Event {
     StreamModifierChanged(modal::stream::Message),
     ComparisonChartInteraction(super::chart::comparison::Message),
     MiniTickersListInteraction(modal::pane::mini_tickers_list::Message),
+    SettingsInteraction(modal::pane::settings::Message),
+    EditIndicator(usize),
+    RemoveModularIndicator(usize),
+    IndicatorSettingChanged(usize, usize, crate::indicators::Setting),
 }
 
 pub struct State {
@@ -243,7 +247,7 @@ impl State {
                             let depth_aggr = derived_plan
                                 .ticker_info
                                 .exchange()
-                                .stream_ticksize(None, TickMultiplier(50));
+                                .stream_ticksize(None, TickMultiplier(50.0));
                             let temp = PaneSetup {
                                 depth_aggr,
                                 ..derived_plan
@@ -363,6 +367,8 @@ impl State {
                 } else {
                     let (raw_trades, tick_size) = (chart.raw_trades(), chart.tick_size());
                     let layout = chart.chart_layout();
+                    let kind = chart.kind().clone();
+                    let modular_indicators = std::mem::take(&mut chart.modular_indicators);
 
                     *chart = KlineChart::new(
                         layout,
@@ -372,7 +378,8 @@ impl State {
                         raw_trades,
                         indicators,
                         ticker_info,
-                        chart.kind(),
+                        &kind,
+                        modular_indicators,
                     );
                 }
             }
@@ -633,7 +640,7 @@ impl State {
                         .settings
                         .selected_basis
                         .unwrap_or(Basis::default_heatmap_time(self.stream_pair()));
-                    let tick_multiply = self.settings.tick_multiply.unwrap_or(TickMultiplier(1));
+                    let tick_multiply = self.settings.tick_multiply.unwrap_or(TickMultiplier(1.0));
 
                     let kind = ModifierKind::Orderbook(basis, tick_multiply);
 
@@ -691,7 +698,7 @@ impl State {
                         .settings
                         .selected_basis
                         .unwrap_or(Basis::default_heatmap_time(ticker_info));
-                    let tick_multiply = self.settings.tick_multiply.unwrap_or(TickMultiplier(5));
+                    let tick_multiply = self.settings.tick_multiply.unwrap_or(TickMultiplier(5.0));
 
                     let kind = ModifierKind::Heatmap(basis, tick_multiply);
                     let base_ticksize = tick_multiply.base(chart.tick_size());
@@ -712,16 +719,34 @@ impl State {
                     stream_info_element = stream_info_element.push(modifiers);
 
                     let base = chart::view(chart, indicators, timezone).map(move |message| {
-                        Message::PaneEvent(id, Event::ChartInteraction(message))
+                        match message {
+                            chart::Message::EditIndicator(idx) => Message::PaneEvent(id, Event::EditIndicator(idx)),
+                            chart::Message::RemoveModularIndicator(idx) => Message::PaneEvent(id, Event::RemoveModularIndicator(idx)),
+                            _ => Message::PaneEvent(id, Event::ChartInteraction(message))
+                        }
                     });
                     let settings_modal = || {
-                        heatmap_cfg_view(
-                            chart.visual_config(),
-                            id,
-                            chart.study_configurator(),
-                            &chart.studies,
-                            basis,
-                        )
+                        match &self.modal {
+                            Some(Modal::Settings(state)) => {
+                                 heatmap_cfg_view(
+                                    chart.visual_config(),
+                                    id,
+                                    chart.study_configurator(),
+                                    &chart.studies,
+                                    basis,
+                                    state,
+                                )
+                            }
+                             Some(Modal::IndicatorSettings(idx)) => {
+                                if *idx < chart.modular_indicators.len() {
+                                    
+                                     modal::pane::indicator_settings::view(id, chart.modular_indicators[*idx].as_ref(), *idx)
+                                } else {
+                                     column![].into()
+                                }
+                            }
+                            _ => column![].into(),
+                        }
                     };
 
                     let indicator_modal = if self.modal == Some(Modal::Indicators) {
@@ -769,7 +794,7 @@ impl State {
                             let basis =
                                 self.settings.selected_basis.unwrap_or(Timeframe::M5.into());
                             let tick_multiply =
-                                self.settings.tick_multiply.unwrap_or(TickMultiplier(10));
+                                self.settings.tick_multiply.unwrap_or(TickMultiplier(10.0));
 
                             let kind = ModifierKind::Footprint(basis, tick_multiply);
                             let base_ticksize = tick_multiply.base(chart.tick_size());
@@ -808,16 +833,34 @@ impl State {
                     }
 
                     let base = chart::view(chart, indicators, timezone).map(move |message| {
-                        Message::PaneEvent(id, Event::ChartInteraction(message))
+                        match message {
+                            chart::Message::EditIndicator(idx) => Message::PaneEvent(id, Event::EditIndicator(idx)),
+                            chart::Message::RemoveModularIndicator(idx) => Message::PaneEvent(id, Event::RemoveModularIndicator(idx)),
+                            _ => Message::PaneEvent(id, Event::ChartInteraction(message))
+                        }
                     });
                     let settings_modal = || {
-                        kline_cfg_view(
-                            chart.study_configurator(),
-                            data::chart::kline::Config {},
-                            chart_kind,
-                            id,
-                            chart.basis(),
-                        )
+                         match &self.modal {
+                            Some(Modal::Settings(s)) => {
+                                kline_cfg_view(
+                                    chart.study_configurator(),
+                                    data::chart::kline::Config {},
+                                    chart_kind,
+                                    id,
+                                    chart.basis(),
+                                    s,
+                                )
+                            }
+                            Some(Modal::IndicatorSettings(idx)) => {
+                                if *idx < chart.modular_indicators.len() {
+                                    
+                                    modal::pane::indicator_settings::view(id, chart.modular_indicators[*idx].as_ref(), *idx)
+                                } else {
+                                    column![].into()
+                                }
+                            }
+                            _ => column![].into(),
+                        }
                     };
 
                     let indicator_modal = if self.modal == Some(Modal::Indicators) {
@@ -890,7 +933,7 @@ impl State {
                             theme,
                             status,
                             self.modal == Some(Modal::Controls)
-                                || self.modal == Some(Modal::Settings),
+                                || matches!(self.modal, Some(Modal::Settings(_))),
                         )
                     }),
             )
@@ -928,7 +971,35 @@ impl State {
     pub fn update(&mut self, msg: Event) -> Option<Effect> {
         match msg {
             Event::ShowModal(requested_modal) => {
-                return self.show_modal_with_focus(requested_modal);
+                let mut modal = requested_modal;
+                if let Modal::Settings(ref mut state) = modal {
+                    match &self.content {
+                        Content::Heatmap { chart: Some(c), .. } => {
+                            let cfg = c.visual_config();
+                            state.trade_size_input =
+                                cfg.trade_size_filter.to_string();
+                            state.order_size_input =
+                                cfg.order_size_filter.to_string();
+                        }
+                        Content::Kline {
+                            kind: data::chart::KlineChartKind::Footprint { studies, .. },
+                            ..
+                        } => {
+                            for s in studies {
+                                if let data::chart::kline::FootprintStudy::Imbalance {
+                                    color_scale: Some(scale),
+                                    ..
+                                } = s
+                                {
+                                    state.color_scale_input = scale.to_string();
+                                    break; 
+                                }
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+                return self.show_modal_with_focus(modal);
             }
             Event::HideModal => {
                 self.modal = None;
@@ -959,6 +1030,102 @@ impl State {
                 Content::TimeAndSales(Some(p)) => super::panel::update(p, msg),
                 _ => {}
             },
+            Event::IndicatorSettingChanged(ind_idx, set_idx, new_setting) => {
+                 match &mut self.content {
+                    Content::Kline { chart: Some(c), .. } => {
+                        if ind_idx < c.modular_indicators.len() {
+                            let klines = c.klines().clone();
+                            let indicator = &mut c.modular_indicators[ind_idx];
+                            if set_idx < indicator.get_settings().len() {
+                                indicator.get_settings()[set_idx] = new_setting;
+                                indicator.sync_settings(); 
+                                indicator.reset(); 
+                                
+                                // Re-pump historical data to rebuild state
+                                for kline in &klines {
+                                    indicator.update_kline(kline);
+                                }
+                                
+                                c.invalidate_all();
+                            }
+                        }
+                    }
+                    Content::Heatmap { chart: Some(c), .. } => {
+                       if ind_idx < c.modular_indicators.len() {
+                            let indicator = &mut c.modular_indicators[ind_idx];
+                            if set_idx < indicator.get_settings().len() {
+                                indicator.get_settings()[set_idx] = new_setting;
+                                indicator.sync_settings();
+                                indicator.reset();
+                                
+                                // Heatmap indicators might need data pump too if they track price
+                                // For now, we mainly focus on KlineChart as requested by user's screenshot
+                                
+                                c.invalidate_all();
+                            }
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            Event::EditIndicator(idx) => {
+                self.modal = Some(Modal::IndicatorSettings(idx));
+            }
+            Event::RemoveModularIndicator(idx) => {
+                 match &mut self.content {
+                    Content::Kline { chart: Some(c), modular_indicators, .. } => {
+                        if idx < c.modular_indicators.len() {
+                            let name = c.modular_indicators[idx].name().to_string();
+                            c.modular_indicators.remove(idx);
+                            c.invalidate_all();
+                             // Also remove from the list of enabled indicators to keep sync
+                            if let Some(pos) = modular_indicators.iter().position(|n| n == &name) {
+                                modular_indicators.remove(pos);
+                            }
+                            
+                            // Re-calculate layout if needed (detached count changed)
+                             let current_detached = c.detached_indicator_count();
+                             // We don't have easy access to prev_detached here without tracking it, 
+                             // but we can just recalc based on cur.
+                             // However, without the previous count, we might reset splits unnecessarily.
+                             // For now, let's just update the layout splits blindly for robustness or simplify.
+                             // Actually, let's just trigger a layout update if we can.
+                             let mut layout = c.chart_layout();
+                             let main_split = layout.splits.first().copied().unwrap_or(0.8);
+                             // We assume 0.8 as default main split if missing
+                             // We need to know if the removed indicator WAS detached to know if we should change layout.
+                             // Since we already removed it, we can't check `is_overlay`. 
+                             // Ideally we should check before removing.
+                             
+                             // Let's rely on the fact that if it was detached, the new count will be diff from splits count - 1 (since 1 is main).
+                             // No, splits len is detached_count + 1 (if > 0) usually? Or separate panels?
+                             // splits array defines relative sizes. If we have N panels, we need N weights.
+                             // data::util::calc_panel_splits handles this.
+                             
+                             layout.splits = data::util::calc_panel_splits(main_split, current_detached, None);
+                             c.set_layout(layout);
+                        }
+                    }
+                    Content::Heatmap { chart: Some(c), modular_indicators, .. } => {
+                        if idx < c.modular_indicators.len() {
+                            let name = c.modular_indicators[idx].name().to_string();
+                            c.modular_indicators.remove(idx);
+                            c.invalidate_all();
+                            
+                            if let Some(pos) = modular_indicators.iter().position(|n| n == &name) {
+                                modular_indicators.remove(pos);
+                            }
+
+                             let current_detached = c.detached_indicator_count();
+                             let mut layout = c.chart_layout();
+                             let main_split = layout.splits.first().copied().unwrap_or(0.8);
+                             layout.splits = data::util::calc_panel_splits(main_split, current_detached, None);
+                             c.set_layout(layout);
+                        }
+                    }
+                    _ => {}
+                 }
+            }
             Event::ToggleIndicator(ind) => {
                 self.content.toggle_indicator(ind);
             }
@@ -1118,7 +1285,7 @@ impl State {
                                                             StreamTicksize::ServerSide(
                                                                 self.settings
                                                                     .tick_multiply
-                                                                    .unwrap_or(TickMultiplier(1)),
+                                                                    .unwrap_or(TickMultiplier(1.0)),
                                                             )
                                                         };
                                                         streams.push(StreamKind::DepthAndTrades {
@@ -1148,7 +1315,7 @@ impl State {
                                                         StreamTicksize::ServerSide(
                                                             self.settings
                                                                 .tick_multiply
-                                                                .unwrap_or(TickMultiplier(1)),
+                                                                .unwrap_or(TickMultiplier(1.0)),
                                                         )
                                                     };
 
@@ -1212,7 +1379,7 @@ impl State {
                             chart.set_series_name(t, name);
                         }
                         super::chart::comparison::Action::OpenSeriesEditor => {
-                            self.modal = Some(Modal::Settings);
+                            self.modal = Some(Modal::Settings(Default::default()));
                         }
                         super::chart::comparison::Action::RemoveSeries(ti) => {
                             let rebuilt = chart.remove_ticker(&ti);
@@ -1255,6 +1422,75 @@ impl State {
                     }
                 }
             }
+            Event::SettingsInteraction(msg) => {
+                if let Some(Modal::Settings(ref mut state)) = self.modal {
+                    match msg {
+                        modal::pane::settings::Message::TradeSizeInputChanged(val) => {
+                            state.trade_size_input = val.clone();
+                            if let Ok(v) = val.parse::<f64>() {
+                                if let Content::Heatmap { chart: Some(c), .. } = &mut self.content {
+                                    let mut cfg = c.visual_config();
+                                    let v_f32 = v as f32;
+                                    if cfg.trade_size_filter != v_f32 {
+                                        cfg.trade_size_filter = v_f32;
+                                        // Update the chart
+                                        c.set_visual_config(cfg);
+                                    }
+                                }
+                            }
+                        }
+                        modal::pane::settings::Message::OrderSizeInputChanged(val) => {
+                            state.order_size_input = val.clone();
+                            if let Ok(v) = val.parse::<f64>() {
+                                if let Content::Heatmap { chart: Some(c), .. } = &mut self.content {
+                                    let mut cfg = c.visual_config();
+                                    let v_f32 = v as f32;
+                                    if cfg.order_size_filter != v_f32 {
+                                        cfg.order_size_filter = v_f32;
+                                        // Update the chart
+                                        c.set_visual_config(cfg);
+                                    }
+                                }
+                            }
+                        }
+                        modal::pane::settings::Message::ColorScaleInputChanged(val) => {
+                            state.color_scale_input = val.clone();
+                            if let Ok(v) = val.parse::<f64>() {
+                                if let Content::Kline {
+                                    kind:
+                                        data::chart::KlineChartKind::Footprint {
+                                            studies,
+                                            ..
+                                        },
+                                    chart: Some(c),
+                                    ..
+                                } = &mut self.content
+                                {
+                                    // We need to find the active Imbalance study and update it
+                                    let mut new_studies = studies.clone();
+                                    for s in &mut new_studies {
+                                        if let data::chart::kline::FootprintStudy::Imbalance {
+                                            color_scale: Some(scale),
+                                            ..
+                                        } = s
+                                        {
+                                            *scale = v as usize;
+                                        }
+                                    }
+                                    
+                                     // Also update the chart's studies if they differ
+                                    if c.studies() != Some(new_studies.clone()) {
+                                         c.update_studies(new_studies.clone());
+                                         // We also need to update the content's studies list to stay in sync
+                                         *studies = new_studies;
+                                    }
+                                }
+                            }
+                        }
+
+                    }
+                }
+            }
         }
         None
     }
@@ -1290,10 +1526,10 @@ impl State {
         if !treat_as_starter {
             buttons = buttons.push(button_with_tooltip(
                 icon_text(Icon::Cog, 12),
-                show_modal(Modal::Settings),
+                show_modal(Modal::Settings(Default::default())),
                 None,
                 tooltip_pos,
-                modal_btn_style(Modal::Settings),
+                modal_btn_style(Modal::Settings(Default::default())),
             ));
         }
         if !treat_as_starter
@@ -1423,7 +1659,14 @@ impl State {
                     Alignment::Start,
                 )
             }
-            Some(Modal::Settings) => stack_modal(
+            Some(Modal::Settings(_)) => stack_modal(
+                base,
+                settings_modal(),
+                on_blur,
+                padding::right(12).left(12),
+                Alignment::End,
+            ),
+             Some(Modal::IndicatorSettings(_)) => stack_modal(
                 base,
                 settings_modal(),
                 on_blur,
@@ -1580,12 +1823,14 @@ pub enum Content {
     Heatmap {
         chart: Option<HeatmapChart>,
         indicators: Vec<HeatmapIndicator>,
+        modular_indicators: Vec<String>,
         layout: data::chart::ViewConfig,
         studies: Vec<data::chart::heatmap::HeatmapStudy>,
     },
     Kline {
         chart: Option<KlineChart>,
         indicators: Vec<KlineIndicator>,
+        modular_indicators: Vec<String>,
         layout: data::chart::ViewConfig,
         kind: data::chart::KlineChartKind,
     },
@@ -1601,15 +1846,17 @@ impl Content {
         settings: &Settings,
         tick_size: f32,
     ) -> Self {
-        let (enabled_indicators, layout, prev_studies) = if let Content::Heatmap {
+        let (enabled_indicators, enabled_modular, layout, prev_studies) = if let Content::Heatmap {
             chart,
             indicators,
+            modular_indicators,
             studies,
             layout,
         } = current_content
         {
             (
                 indicators.clone(),
+                modular_indicators.clone(),
                 chart
                     .as_ref()
                     .map(|c| c.chart_layout())
@@ -1621,6 +1868,7 @@ impl Content {
         } else {
             (
                 vec![HeatmapIndicator::Volume],
+                vec!["VWAP".to_string(), "CVD".to_string()],
                 ViewConfig {
                     splits: vec![],
                     autoscale: Some(data::chart::Autoscale::CenterLatest),
@@ -1634,6 +1882,27 @@ impl Content {
             .unwrap_or_else(|| Basis::default_heatmap_time(Some(ticker_info)));
         let config = settings.visual_config.clone().and_then(|cfg| cfg.heatmap());
 
+        let mut mod_indis = vec![];
+        let mut detached_mod_count = 0;
+        for name in &enabled_modular {
+            if let Some(factory) = crate::indicators::REGISTRY.create(name, crate::indicators::IndicatorConfig::default()) {
+                if !factory.is_overlay() {
+                    detached_mod_count += 1;
+                }
+                mod_indis.push(factory);
+            }
+        }
+
+        let total_detached = detached_mod_count;
+        let layout = if layout.splits.len() == total_detached {
+            layout
+        } else {
+            ViewConfig {
+                splits: data::util::calc_panel_splits(0.8, total_detached, None),
+                autoscale: layout.autoscale,
+            }
+        };
+
         let chart = HeatmapChart::new(
             layout.clone(),
             basis,
@@ -1642,11 +1911,13 @@ impl Content {
             ticker_info,
             config,
             prev_studies.clone(),
+            mod_indis,
         );
 
         Content::Heatmap {
             chart: Some(chart),
             indicators: enabled_indicators,
+            modular_indicators: enabled_modular,
             layout,
             studies: prev_studies,
         }
@@ -1659,20 +1930,22 @@ impl Content {
         settings: &Settings,
         tick_size: f32,
     ) -> Self {
-        let (prev_indis, prev_layout, prev_kind_opt) = if let Content::Kline {
+        let (prev_indis, prev_modular, prev_layout, prev_kind_opt) = if let Content::Kline {
             chart,
             indicators,
+            modular_indicators,
             kind,
             layout,
         } = current_content
         {
             (
                 Some(indicators.clone()),
+                Some(modular_indicators.clone()),
                 Some(chart.as_ref().map_or(layout.clone(), |c| c.chart_layout())),
                 Some(chart.as_ref().map_or(kind.clone(), |c| c.kind().clone())),
             )
         } else {
-            (None, None, None)
+            (None, None, None, None)
         };
 
         let (default_tf, determined_chart_kind) = match content_kind {
@@ -1690,6 +1963,10 @@ impl Content {
             _ => unreachable!("invalid content kind for kline chart"),
         };
 
+        let enabled_modular = prev_modular.unwrap_or_else(|| {
+            vec!["VWAP".to_string(), "CVD".to_string()]
+        });
+
         let basis = settings.selected_basis.unwrap_or(Basis::Time(default_tf));
 
         let enabled_indicators = {
@@ -1705,27 +1982,19 @@ impl Content {
             )
         };
 
-        let splits = {
-            let main_chart_split: f32 = 0.8;
-            let mut splits_vec = vec![main_chart_split];
-
-            if !enabled_indicators.is_empty() {
-                let num_indicators = enabled_indicators.len();
-
-                if num_indicators > 0 {
-                    let indicator_total_height_ratio = 1.0 - main_chart_split;
-                    let height_per_indicator_pane =
-                        indicator_total_height_ratio / num_indicators as f32;
-
-                    let mut current_split_pos = main_chart_split;
-                    for _ in 0..(num_indicators - 1) {
-                        current_split_pos += height_per_indicator_pane;
-                        splits_vec.push(current_split_pos);
-                    }
+        let mut mod_indis = vec![];
+        let mut detached_mod_count = 0;
+        for name in &enabled_modular {
+            if let Some(factory) = crate::indicators::REGISTRY.create(name, crate::indicators::IndicatorConfig::default()) {
+                if !factory.is_overlay() {
+                    detached_mod_count += 1;
                 }
+                mod_indis.push(factory);
             }
-            splits_vec
-        };
+        }
+
+        let total_detached = enabled_indicators.len() + detached_mod_count;
+        let splits = data::util::calc_panel_splits(0.8, total_detached, None);
 
         let layout = prev_layout
             .filter(|l| l.splits.len() == splits.len())
@@ -1743,11 +2012,13 @@ impl Content {
             &enabled_indicators,
             ticker_info,
             &determined_chart_kind,
+            mod_indis,
         );
 
         Content::Kline {
             chart: Some(chart),
             indicators: enabled_indicators,
+            modular_indicators: enabled_modular,
             layout,
             kind: determined_chart_kind,
         }
@@ -1759,6 +2030,7 @@ impl Content {
             ContentKind::CandlestickChart => Content::Kline {
                 chart: None,
                 indicators: vec![KlineIndicator::Volume],
+                modular_indicators: vec![],
                 kind: data::chart::KlineChartKind::Candles,
                 layout: ViewConfig {
                     splits: vec![],
@@ -1768,6 +2040,7 @@ impl Content {
             ContentKind::FootprintChart => Content::Kline {
                 chart: None,
                 indicators: vec![KlineIndicator::Volume],
+                modular_indicators: vec![],
                 kind: data::chart::KlineChartKind::Footprint {
                     clusters: data::chart::kline::ClusterKind::default(),
                     scaling: data::chart::kline::ClusterScaling::default(),
@@ -1781,6 +2054,7 @@ impl Content {
             ContentKind::HeatmapChart => Content::Heatmap {
                 chart: None,
                 indicators: vec![HeatmapIndicator::Volume],
+                modular_indicators: vec![],
                 studies: vec![],
                 layout: ViewConfig {
                     splits: vec![],
@@ -1812,23 +2086,32 @@ impl Content {
     }
 
     pub fn toggle_indicator(&mut self, indicator: UiIndicator) {
-        match (self, indicator) {
+        match (self, indicator.clone()) {
             (
                 Content::Heatmap {
                     chart, indicators, ..
                 },
                 UiIndicator::Heatmap(ind),
             ) => {
-                let Some(chart) = chart else {
-                    return;
-                };
+                if let Some(chart) = chart {
+                    let prev_detached = chart.detached_indicator_count();
+                    
+                    if indicators.contains(&ind) {
+                        indicators.retain(|i| i != &ind);
+                    } else {
+                        indicators.push(ind);
+                    }
+                    chart.toggle_indicator(ind);
 
-                if indicators.contains(&ind) {
-                    indicators.retain(|i| i != &ind);
-                } else {
-                    indicators.push(ind);
+                    let current_detached = chart.detached_indicator_count();
+                    if prev_detached != current_detached {
+                        let mut layout = chart.chart_layout();
+                        let main_split = layout.splits.first().copied().unwrap_or(0.8);
+                        layout.splits = data::util::calc_panel_splits(main_split, current_detached, Some(prev_detached));
+                        chart.set_layout(layout);
+                    }
+                    chart.invalidate_all();
                 }
-                chart.toggle_indicator(ind);
             }
             (
                 Content::Kline {
@@ -1836,16 +2119,103 @@ impl Content {
                 },
                 UiIndicator::Kline(ind),
             ) => {
-                let Some(chart) = chart else {
-                    return;
-                };
+                if let Some(chart) = chart {
+                    let prev_detached = chart.detached_indicator_count();
+                    
+                    if indicators.contains(&ind) {
+                        indicators.retain(|i| i != &ind);
+                    } else {
+                        indicators.push(ind);
+                    }
+                    chart.toggle_indicator(ind);
 
-                if indicators.contains(&ind) {
-                    indicators.retain(|i| i != &ind);
-                } else {
-                    indicators.push(ind);
+                    let current_detached = chart.detached_indicator_count();
+                    if prev_detached != current_detached {
+                        let mut layout = chart.chart_layout();
+                        let main_split = layout.splits.first().copied().unwrap_or(0.8);
+                        layout.splits = data::util::calc_panel_splits(main_split, current_detached, Some(prev_detached));
+                        chart.set_layout(layout);
+                    }
+                    chart.invalidate_all();
                 }
-                chart.toggle_indicator(ind);
+            }
+            (
+                Content::Heatmap {
+                    chart,
+                    modular_indicators,
+                    ..
+                },
+                UiIndicator::Modular(name),
+            ) => {
+                if modular_indicators.contains(&name) {
+                    modular_indicators.retain(|n| n != &name);
+                } else {
+                    modular_indicators.push(name.clone());
+                }
+
+                if let Some(chart) = chart {
+                    let prev_detached = chart.detached_indicator_count();
+                    if let Some(idx) = chart.modular_indicators.iter().position(|i| i.name() == name) {
+                        chart.modular_indicators.remove(idx);
+                    } else {
+                        let config = crate::indicators::IndicatorConfig {
+                            name: name.clone(),
+                            ..Default::default()
+                        };
+                        if let Some(mut indicator) = crate::indicators::REGISTRY.create(&name, config) {
+                            indicator.set_tick_size(chart.tick_size() as f64); for kline in chart.klines() { indicator.update_kline(&kline); }
+                            chart.modular_indicators.push(indicator);
+                        }
+                    }
+
+                    let current_detached = chart.detached_indicator_count();
+                    if prev_detached != current_detached {
+                        let mut layout = chart.chart_layout();
+                        let main_split = layout.splits.first().copied().unwrap_or(0.8);
+                        layout.splits = data::util::calc_panel_splits(main_split, current_detached, Some(prev_detached));
+                        chart.set_layout(layout);
+                    }
+                    chart.invalidate_all();
+                }
+            }
+            (
+                Content::Kline {
+                    chart,
+                    modular_indicators,
+                    ..
+                },
+                UiIndicator::Modular(name),
+            ) => {
+                if modular_indicators.contains(&name) {
+                    modular_indicators.retain(|n| n != &name);
+                } else {
+                    modular_indicators.push(name.clone());
+                }
+
+                if let Some(chart) = chart {
+                    let prev_detached = chart.detached_indicator_count();
+                    if let Some(idx) = chart.modular_indicators.iter().position(|i| i.name() == name) {
+                        chart.modular_indicators.remove(idx);
+                    } else {
+                        let config = crate::indicators::IndicatorConfig {
+                            name: name.clone(),
+                            ..Default::default()
+                        };
+                        if let Some(mut indicator) = crate::indicators::REGISTRY.create(&name, config) {
+                            indicator.set_tick_size(chart.tick_size() as f64); for kline in chart.klines() { indicator.update_kline(&kline); }
+                            chart.modular_indicators.push(indicator);
+                        }
+                    }
+
+                    let current_detached = chart.detached_indicator_count();
+                    if prev_detached != current_detached {
+                        let mut layout = chart.chart_layout();
+                        let main_split = layout.splits.first().copied().unwrap_or(0.8);
+                        layout.splits = data::util::calc_panel_splits(main_split, current_detached, Some(prev_detached));
+                        chart.set_layout(layout);
+                    }
+                    chart.invalidate_all();
+                }
             }
             _ => panic!("indicator toggle on {indicator:?} pane",),
         }

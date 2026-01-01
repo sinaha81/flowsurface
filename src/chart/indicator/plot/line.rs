@@ -79,11 +79,13 @@ where
 
         datapoints.for_each_in(range, |_, y| {
             let v = (self.value)(y);
-            if v < min_v {
-                min_v = v;
-            }
-            if v > max_v {
-                max_v = v;
+            if v.is_finite() {
+                if v < min_v {
+                    min_v = v;
+                }
+                if v > max_v {
+                    max_v = v;
+                }
             }
         });
 
@@ -129,7 +131,16 @@ where
         datapoints.for_each_in(range.clone(), |x, y| {
             let sx = ctx.interval_to_x(x) - (ctx.cell_width / 2.0);
             let vy = (self.value)(y);
+            if !vy.is_finite() {
+                prev = None; // Break the line on non-finite values
+                return;
+            }
             let sy = scale.to_y(vy);
+            if !sx.is_finite() || !sy.is_finite() {
+                prev = None;
+                return;
+            }
+
             if let Some((px, py)) = prev {
                 frame.stroke(
                     &Path::line(iced::Point::new(px, py), iced::Point::new(sx, sy)),
@@ -143,8 +154,12 @@ where
             let radius = (ctx.cell_width * self.point_radius_factor).min(5.0);
             datapoints.for_each_in(range, |x, y| {
                 let sx = ctx.interval_to_x(x) - (ctx.cell_width / 2.0);
-                let sy = scale.to_y((self.value)(y));
-                frame.fill(&Path::circle(iced::Point::new(sx, sy), radius), color);
+                let vy = (self.value)(y);
+                if !vy.is_finite() { return; }
+                let sy = scale.to_y(vy);
+                if sx.is_finite() && sy.is_finite() {
+                    frame.fill(&Path::circle(iced::Point::new(sx, sy), radius), color);
+                }
             });
         }
     }

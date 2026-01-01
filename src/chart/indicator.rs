@@ -120,25 +120,29 @@ impl canvas::Program<Message> for IndicatorLabel<'_> {
             };
 
             if let Some(crosshair_pos) = cursor.position_in(common_bounds) {
-                let rounded_value = round_to_tick(
-                    lowest + (range * (bounds.height - crosshair_pos.y) / bounds.height),
-                    tick_size,
-                );
+                let y_ratio = (bounds.height - crosshair_pos.y) / bounds.height;
+                if y_ratio.is_finite() {
+                    let rounded_value = round_to_tick(
+                        lowest + (range * y_ratio),
+                        tick_size,
+                    );
 
-                let label = LabelContent {
-                    content: abbr_large_numbers(rounded_value),
-                    background_color: Some(palette.secondary.base.color),
-                    text_color: palette.secondary.base.text,
-                    text_size: TEXT_SIZE,
-                };
+                    let label = LabelContent {
+                        content: abbr_large_numbers(rounded_value),
+                        background_color: Some(palette.secondary.base.color),
+                        text_color: palette.secondary.base.text,
+                        text_size: TEXT_SIZE,
+                    };
 
-                let y_position = bounds.height - ((rounded_value - lowest) / range * bounds.height);
+                    let snap_ratio = if range.abs() < 1e-8 { 0.5 } else { (rounded_value - lowest) / range };
+                    let y_position = bounds.height - (snap_ratio * bounds.height);
 
-                all_labels.push(AxisLabel::Y {
-                    bounds: calc_label_rect(y_position, 1, TEXT_SIZE, bounds),
-                    value_label: label,
-                    timer_label: None,
-                });
+                    all_labels.push(AxisLabel::Y {
+                        bounds: calc_label_rect(y_position, 1, TEXT_SIZE, bounds),
+                        value_label: label,
+                        timer_label: None,
+                    });
+                }
             }
 
             AxisLabel::filter_and_draw(&all_labels, frame);

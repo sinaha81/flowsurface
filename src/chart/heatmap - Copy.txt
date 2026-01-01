@@ -8,7 +8,8 @@ use crate::{
 use data::chart::{
     Basis, ViewConfig,
     heatmap::{
-        CLEANUP_THRESHOLD, Config, HeatmapDataPoint, HeatmapStudy, HistoricalDepth, QtyScale,
+        CLEANUP_THRESHOLD, Config, HeatmapDataPoint, HeatmapStudy, HistoricalDepth, ProfileKind,
+        QtyScale,
     },
     indicator::HeatmapIndicator,
 };
@@ -18,7 +19,7 @@ use data::{
     chart::Autoscale,
 };
 use exchange::{
-    Kline, TickerInfo, Trade,
+    TickerInfo, Trade,
     depth::Depth,
     util::{Price, PriceStep},
     volume_size_unit,
@@ -34,14 +35,14 @@ use enum_map::EnumMap;
 use rustc_hash::FxHashMap;
 use std::time::Instant;
 
-const MIN_SCALING: f32 = 0.01;
-const MAX_SCALING: f32 = 1000.0;
+const MIN_SCALING: f32 = 0.6;
+const MAX_SCALING: f32 = 1.2;
 
-const MAX_CELL_WIDTH: f32 = 500.0;
-const MIN_CELL_WIDTH: f32 = 0.1;
+const MAX_CELL_WIDTH: f32 = 12.0;
+const MIN_CELL_WIDTH: f32 = 1.0;
 
-const MAX_CELL_HEIGHT: f32 = 500.0;
-const MIN_CELL_HEIGHT: f32 = 0.1;
+const MAX_CELL_HEIGHT: f32 = 10.0;
+const MIN_CELL_HEIGHT: f32 = 1.0;
 
 const DEFAULT_CELL_WIDTH: f32 = 3.0;
 
@@ -122,40 +123,6 @@ impl Chart for HeatmapChart {
 
     fn is_empty(&self) -> bool {
         self.trades.datapoints.is_empty()
-    }
-
-    fn legend(&self) -> Option<Element<'_, Message>> {
-        use iced::widget::{button, column, container, row, text};
-        use crate::style::{self, icon_text, Icon};
-        
-        if self.modular_indicators.is_empty() {
-             return None;
-        }
-        
-        let items: Vec<Element<_>> = self.modular_indicators.iter().enumerate().map(|(idx, ind)| {
-             let name = text(ind.name()).size(12);
-             
-             let settings_btn = button(icon_text(Icon::Cog, 14))
-                 .on_press(Message::EditIndicator(idx))
-                 .padding(2)
-                 .style(|t, s| style::button::transparent(t, s, false));
-
-             let remove_btn = button(icon_text(Icon::Close, 14))
-                 .on_press(Message::RemoveModularIndicator(idx))
-                 .padding(2)
-                 .style(|t, s| style::button::cancel(t, s, false));
-                 
-             row![name, settings_btn, remove_btn].spacing(8).align_y(Alignment::Center).into()
-        }).collect();
-        
-        Some(
-            container(
-                column(items).spacing(4)
-            )
-            .padding(8)
-            .style(style::ticker_card)
-            .into()
-        )
     }
 }
 
@@ -438,14 +405,6 @@ impl HeatmapChart {
         self.chart.tick_size.to_f32_lossy()
     }
 
-    pub fn klines(&self) -> Vec<Kline> {
-        self.trades
-            .datapoints
-            .values()
-            .filter_map(|dp| DataPoint::kline(dp).cloned())
-            .collect()
-    }
-
     pub fn toggle_indicator(&mut self, indicator: HeatmapIndicator) {
         if self.indicators[indicator].is_some() {
             self.indicators[indicator] = None;
@@ -569,21 +528,10 @@ impl canvas::Program<Message> for HeatmapChart {
                 translation: chart.translation,
                 viewport_range: (earliest, latest),
                 price_range: (highest.to_f32() as f64, lowest.to_f32() as f64),
-                base_price: chart.base_price_y.to_f32_lossy() as f64,
-                tick_size: chart.tick_size.to_f32_lossy() as f64,
-                cell_height: chart.cell_height,
-                latest_x: chart.latest_x,
-                cell_width: chart.cell_width,
-                interval: match chart.basis {
-                    data::chart::Basis::Time(tf) => tf.to_milliseconds(),
-                    data::chart::Basis::Tick(_) => 1,
-                },
             };
 
             for indicator in &self.modular_indicators {
-                if indicator.is_overlay() {
-                    indicator.render(&mut ctx);
-                }
+                indicator.render(&mut ctx);
             }
 
             if latest < earliest {
@@ -801,9 +749,43 @@ impl canvas::Program<Message> for HeatmapChart {
                 });
             }
 
+            let volume_profile: Option<&ProfileKind> = self
+                .studies
+                .iter()
+                .map(|study| match study {
+                    HeatmapStudy::VolumeProfile(profile) => profile,
+                })
+                .next();
 
-       
+            if let Some(profile_kind) = volume_profile {
+                let area_width = (bounds.width / chart.scaling) * 0.1;
 
+                let min_segment_width = 2.0;
+                let segments = ((area_width / min_segment_width).floor() as usize).clamp(10, 40);
+
+                for i in 0..segments {
+                    let segment_width = area_width / segments as f32;
+                    let segment_x = region.x + (i as f32 * segment_width);
+
+                    let alpha = 0.95 - (0.85 * (i as f32 / (segments - 1) as f32).powf(2.0));
+
+                    frame.fill_rectangle(
+                        Point::new(segment_x, region.y),
+                        Size::new(segment_width, region.height),
+                        palette.background.weakest.color.scale_alpha(alpha),
+                    );
+                }
+
+                draw_volume_profile(
+                    frame,
+                    &region,
+                    profile_kind,
+                    palette,
+                    chart,
+                    &self.trades,
+                    area_width,
+                );
+            }
 
             let is_paused = chart.translation.x * chart.scaling > chart.bounds.width / 2.0;
             if is_paused {
@@ -988,42 +970,168 @@ impl canvas::Program<Message> for HeatmapChart {
 
 /// Bookmap-style depth coloring with multi-color gradient
 /// Uses blue → cyan → yellow → orange → red gradient for better liquidity visualization
-/// Bookmap-style depth coloring with multi-color gradient
-/// Uses Blue -> Cyan -> Yellow -> Orange -> Red -> White gradient based on liquidity density
-fn depth_color(_palette: &Extended, _is_bid: bool, alpha: f32) -> Color {
-    // Bookmap-style: Heatmap is primarily about density, not side (since Bids are below and Asks above naturally)
-    
-    // Non-linear intensity for better visibility of lower liquidity
-    let intensity = alpha.powf(0.5).clamp(0.0, 1.0);
+fn depth_color(_palette: &Extended, is_bid: bool, alpha: f32) -> Color {
+    // Bookmap-style: Bright intensity for concentration
+    // Use gamma-like scaling for better visibility of smaller orders
+    let intensity = alpha.powf(0.6); // Power < 1.0 expands the lower range (makes mid-sized orders brighter)
 
-    let (r, g, b) = if intensity < 0.2 {
-        // Dark Blue to Blue
-        let t = intensity / 0.2;
-        (0.0, 0.0, 0.2 + 0.6 * t)
-    } else if intensity < 0.4 {
-        // Blue to Cyan
-        let t = (intensity - 0.2) / 0.2;
-        (0.0, t, 0.8 + 0.2 * t)
-    } else if intensity < 0.6 {
-        // Cyan to Green/Yellow
-        let t = (intensity - 0.4) / 0.2;
-        (t, 1.0, 1.0 - t)
-    } else if intensity < 0.8 {
-        // Yellow to Orange/Red
-        let t = (intensity - 0.6) / 0.2;
-        (1.0, 1.0 - 0.5 * t, 0.0)
+    let base_color = if is_bid {
+        // BID Gradient: Dark Blue (Low) -> Cyan -> Green -> Bright Yellow -> White (Ultra High)
+        if intensity < 0.2 {
+            let t = intensity / 0.2;
+            Color::from_rgb(0.0, 0.1 + 0.5 * t, 0.4 + 0.6 * t) // Dark Blue to Cyan
+        } else if intensity < 0.5 {
+            let t = (intensity - 0.2) / 0.3;
+            Color::from_rgb(0.0, 0.6 + 0.4 * t, 1.0 - 0.5 * t) // Cyan to Greenish
+        } else if intensity < 0.8 {
+            let t = (intensity - 0.5) / 0.3;
+            Color::from_rgb(0.2 + 0.8 * t, 1.0, 0.5 - 0.5 * t) // Green to Yellow
+        } else {
+            let t = (intensity - 0.8) / 0.2;
+            Color::from_rgb(1.0, 1.0, 0.0 + 1.0 * t) // Yellow to White
+        }
     } else {
-        // Red to White
-        let t = (intensity - 0.8) / 0.2;
-        (1.0, 0.5 + 0.5 * t, t)
+        // ASK Gradient: Dark Red (Low) -> Orange -> Hot Pink -> Bright Yellow -> White (Ultra High)
+        if intensity < 0.2 {
+            let t = intensity / 0.2;
+            Color::from_rgb(0.4 + 0.5 * t, 0.0, 0.1) // Dark Red to Red
+        } else if intensity < 0.5 {
+            let t = (intensity - 0.2) / 0.3;
+            Color::from_rgb(0.9 + 0.1 * t, 0.0 + 0.6 * t, 0.1) // Red to Orange
+        } else if intensity < 0.8 {
+            let t = (intensity - 0.5) / 0.3;
+            Color::from_rgb(1.0, 0.6 + 0.4 * t, 0.1 - 0.1 * t) // Orange to Yellow
+        } else {
+            let t = (intensity - 0.8) / 0.2;
+            Color::from_rgb(1.0, 1.0, 0.0 + 1.0 * t) // Yellow to White
+        }
     };
 
+    // Apply visibility boost
+    let final_alpha = (intensity * 0.95 + 0.05).min(1.0);
     Color {
-        r,
-        g,
-        b,
-        a: (intensity * 0.95 + 0.05).min(1.0),
+        r: base_color.r,
+        g: base_color.g,
+        b: base_color.b,
+        a: final_alpha,
     }
 }
 
+fn draw_volume_profile(
+    frame: &mut canvas::Frame,
+    region: &Rectangle,
+    kind: &ProfileKind,
+    palette: &Extended,
+    chart: &ViewState,
+    timeseries: &TimeSeries<HeatmapDataPoint>,
+    area_width: f32,
+) {
+    let (highest, lowest) = chart.price_range(region);
 
+    let time_range = match kind {
+        ProfileKind::VisibleRange => {
+            let earliest = chart.x_to_interval(region.x);
+            let latest = chart.x_to_interval(region.x + region.width);
+            earliest..=latest
+        }
+        ProfileKind::FixedWindow(datapoints) => {
+            let basis_interval: u64 = match chart.basis {
+                Basis::Time(interval) => interval.into(),
+                Basis::Tick(_) => return,
+            };
+
+            let latest = chart
+                .latest_x
+                .min(chart.x_to_interval(region.x + region.width));
+            let earliest = latest.saturating_sub((*datapoints as u64) * basis_interval);
+
+            earliest..=latest
+        }
+    };
+
+    let step = chart.tick_size;
+
+    let first_tick = lowest.round_to_side_step(false, step);
+    let last_tick = highest.round_to_side_step(true, step);
+
+    let num_ticks = match Price::steps_between_inclusive(first_tick, last_tick, step) {
+        Some(n) => n,
+        None => return,
+    };
+
+    if num_ticks > 4096 {
+        return;
+    }
+
+    let mut profile = vec![(0.0f32, 0.0f32); num_ticks];
+    let mut max_aggr_volume = 0.0f32;
+
+    timeseries.datapoints.range(time_range).for_each(|(_, dp)| {
+        dp.grouped_trades
+            .iter()
+            .filter(|trade| trade.price >= lowest && trade.price <= highest)
+            .for_each(|trade| {
+                let grouped_price = trade.price.round_to_side_step(trade.is_sell, step);
+
+                if grouped_price.units < first_tick.units || grouped_price.units > last_tick.units {
+                    return;
+                }
+
+                let index = ((grouped_price.units - first_tick.units) / step.units) as usize;
+
+                if let Some(entry) = profile.get_mut(index) {
+                    if trade.is_sell {
+                        entry.1 += trade.qty;
+                    } else {
+                        entry.0 += trade.qty;
+                    }
+                    max_aggr_volume = max_aggr_volume.max(entry.0 + entry.1);
+                }
+            });
+    });
+
+    profile
+        .iter()
+        .enumerate()
+        .for_each(|(index, (buy_v, sell_v))| {
+            if *buy_v > 0.0 || *sell_v > 0.0 {
+                let price = first_tick.add_steps(index as i64, step);
+                let y_position = chart.price_to_y(price);
+
+                let next_price = price.add_steps(1, step);
+                let next_y_position = chart.price_to_y(next_price);
+                let bar_height = (next_y_position - y_position).abs();
+
+                super::draw_volume_bar(
+                    frame,
+                    region.x,
+                    y_position,
+                    *buy_v,
+                    *sell_v,
+                    max_aggr_volume,
+                    area_width,
+                    bar_height,
+                    palette.success.weak.color,
+                    palette.danger.weak.color,
+                    1.0,
+                    true,
+                );
+            }
+        });
+
+    if max_aggr_volume > 0.0 {
+        let text_size = 9.0 / chart.scaling;
+        let text_content = abbr_large_numbers(max_aggr_volume);
+
+        let text_position = Point::new(region.x + area_width, region.y);
+
+        frame.fill_text(canvas::Text {
+            content: text_content,
+            position: text_position,
+            size: iced::Pixels(text_size),
+            color: palette.background.base.text,
+            font: style::AZERET_MONO,
+            ..canvas::Text::default()
+        });
+    }
+}

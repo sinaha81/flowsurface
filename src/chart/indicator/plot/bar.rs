@@ -91,13 +91,15 @@ where
 
         datapoints.for_each_in(range, |_, y| {
             let v = (self.value)(y);
-            if v < min_v {
-                min_v = v;
+            if v.is_finite() {
+                if v < min_v {
+                    min_v = v;
+                }
+                if v > max_v {
+                    max_v = v;
+                }
+                n += 1;
             }
-            if v > max_v {
-                max_v = v;
-            }
-            n += 1;
         });
 
         if n == 0 || (max_v <= 0.0 && matches!(self.baseline, Baseline::Zero)) {
@@ -143,6 +145,10 @@ where
             let left = center_x - (bar_width / 2.0);
 
             let total = (self.value)(y);
+            if !total.is_finite() {
+                return;
+            }
+            
             let rel = total - baseline_value;
 
             let (top_y, h_total) = if rel > 0.0 {
@@ -152,7 +158,8 @@ where
             } else {
                 (y_base, 0.0)
             };
-            if h_total <= 0.0 {
+            
+            if h_total <= 0.0 || !top_y.is_finite() {
                 return;
             }
 

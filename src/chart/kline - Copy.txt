@@ -5,7 +5,7 @@ use super::{
 use crate::chart::indicator::kline::KlineIndicatorImpl;
 use crate::{modal::pane::settings::study, style};
 use data::aggr::ticks::TickAggr;
-use data::aggr::time::{DataPoint, TimeSeries};
+use data::aggr::time::TimeSeries;
 use data::chart::Autoscale;
 use data::chart::kline::ClusterScaling;
 use data::chart::{
@@ -144,40 +144,6 @@ impl Chart for KlineChart {
             PlotData::TimeBased(timeseries) => timeseries.datapoints.is_empty(),
             PlotData::TickBased(tick_aggr) => tick_aggr.datapoints.is_empty(),
         }
-    }
-
-    fn legend(&self) -> Option<Element<'_, Message>> {
-        use iced::widget::{button, column, container, row, text};
-        use crate::style::{self, icon_text, Icon};
-        
-        if self.modular_indicators.is_empty() {
-             return None;
-        }
-        
-        let items: Vec<Element<_>> = self.modular_indicators.iter().enumerate().map(|(idx, ind)| {
-             let name = text(ind.name()).size(12);
-             
-             let settings_btn = button(icon_text(Icon::Cog, 14))
-                 .on_press(Message::EditIndicator(idx))
-                 .padding(2)
-                 .style(|t, s| style::button::transparent(t, s, false));
-
-             let remove_btn = button(icon_text(Icon::Close, 14))
-                 .on_press(Message::RemoveModularIndicator(idx))
-                 .padding(2)
-                 .style(|t, s| style::button::cancel(t, s, false));
-                 
-             row![name, settings_btn, remove_btn].spacing(8).align_y(Alignment::Center).into()
-        }).collect();
-        
-        Some(
-            container(
-                column(items).spacing(4)
-            )
-            .padding(8)
-            .style(style::ticker_card)
-            .into()
-        )
     }
 }
 
@@ -392,13 +358,6 @@ impl KlineChart {
         }
     }
 
-    pub fn klines(&self) -> Vec<Kline> {
-        match &self.data_source {
-            PlotData::TimeBased(ts) => ts.datapoints.values().filter_map(|dp| DataPoint::kline(dp).cloned()).collect(),
-            PlotData::TickBased(ta) => ta.datapoints.iter().map(|dp| dp.kline.clone()).collect(),
-        }
-    }
-
     pub fn update_latest_kline(&mut self, kline: &Kline) {
         match self.data_source {
             PlotData::TimeBased(ref mut timeseries) => {
@@ -532,11 +491,11 @@ impl KlineChart {
         self.chart.tick_size.to_f32_lossy()
     }
 
-    pub fn study_configurator(&self) -> &crate::modal::pane::settings::study::Configurator<FootprintStudy> {
+    pub fn study_configurator(&self) -> &study::Configurator<FootprintStudy> {
         &self.study_configurator
     }
 
-    pub fn update_study_configurator(&mut self, message: crate::modal::pane::settings::study::Message<FootprintStudy>) {
+    pub fn update_study_configurator(&mut self, message: study::Message<FootprintStudy>) {
         let KlineChartKind::Footprint {
             ref mut studies, ..
         } = self.kind
@@ -1009,21 +968,10 @@ impl canvas::Program<Message> for KlineChart {
                 translation: chart.translation,
                 viewport_range: (earliest, latest),
                 price_range: (highest.to_f32() as f64, lowest.to_f32() as f64),
-                base_price: chart.base_price_y.to_f32_lossy() as f64,
-                tick_size: chart.tick_size.to_f32_lossy() as f64,
-                cell_height: chart.cell_height,
-                latest_x: chart.latest_x,
-                cell_width: chart.cell_width,
-                interval: match chart.basis {
-                    data::chart::Basis::Time(tf) => tf.to_milliseconds(),
-                    data::chart::Basis::Tick(_) => 1,
-                },
             };
 
             for indicator in &self.modular_indicators {
-                if indicator.is_overlay() {
-                    indicator.render(&mut ctx);
-                }
+                indicator.render(&mut ctx);
             }
 
             match &self.kind {
@@ -1072,7 +1020,7 @@ impl canvas::Program<Message> for KlineChart {
 
                     let show_text = {
                         let min_w = match clusters {
-                            ClusterKind::DeltaProfile => 80.0,
+                            ClusterKind::VolumeProfile | ClusterKind::DeltaProfile => 80.0,
                             ClusterKind::BidAsk => 120.0,
                         };
                         should_show_text(cell_height_unscaled, cell_width_unscaled, min_w)
@@ -1150,6 +1098,24 @@ impl canvas::Program<Message> for KlineChart {
             }
 
             chart.draw_last_price_line(frame, palette, region);
+
+            // Render modular indicators
+            let visible_range = chart.interval_range(&region);
+            let price_range = chart.price_range(&region);
+            
+            let mut ctx = crate::indicators::UiContext {
+                frame,
+                theme,
+                bounds: chart.bounds,
+                scaling: chart.scaling,
+                translation: chart.translation,
+                viewport_range: visible_range,
+                price_range: (price_range.0.to_f32() as f64, price_range.1.to_f32() as f64),
+            };
+
+            for indicator in &self.modular_indicators {
+                indicator.render(&mut ctx);
+            }
         });
 
         let crosshair = chart.cache.crosshair.draw(renderer, bounds_size, |frame| {
@@ -1356,14 +1322,14 @@ fn draw_all_npocs(
     let inset = (cell_width * (1.0 - bar_width_factor)) / 2.0;
 
     let candle_lane_factor: f32 = match cluster_kind {
-        ClusterKind::DeltaProfile => 0.25,
+        ClusterKind::VolumeProfile | ClusterKind::DeltaProfile => 0.25,
         ClusterKind::BidAsk => 1.0,
     };
 
     let start_x_for = |cell_center_x: f32| -> f32 {
         match cluster_kind {
             ClusterKind::BidAsk => cell_center_x + (candle_width / 2.0) + spacing.candle_to_cluster,
-            ClusterKind::DeltaProfile => {
+            ClusterKind::VolumeProfile | ClusterKind::DeltaProfile => {
                 let content_left = (cell_center_x - (cell_width / 2.0)) + inset;
                 let candle_lane_left = content_left
                     + if imb_study_on {
@@ -1373,14 +1339,13 @@ fn draw_all_npocs(
                     };
                 candle_lane_left + candle_width * candle_lane_factor + spacing.candle_to_cluster
             }
-
         }
     };
 
     let wick_x_for = |cell_center_x: f32| -> f32 {
         match cluster_kind {
             ClusterKind::BidAsk => cell_center_x, // not used for BidAsk clustering
-            ClusterKind::DeltaProfile => {
+            ClusterKind::VolumeProfile | ClusterKind::DeltaProfile => {
                 let content_left = (cell_center_x - (cell_width / 2.0)) + inset;
                 let candle_lane_left = content_left
                     + if imb_study_on {
@@ -1391,14 +1356,13 @@ fn draw_all_npocs(
                 candle_lane_left + (candle_width * candle_lane_factor) / 2.0
                     - (spacing.candle_to_cluster * 0.5)
             }
-
         }
     };
 
     let end_x_for = |cell_center_x: f32| -> f32 {
         match cluster_kind {
             ClusterKind::BidAsk => cell_center_x - (candle_width / 2.0) - spacing.candle_to_cluster,
-            ClusterKind::DeltaProfile => wick_x_for(cell_center_x),
+            ClusterKind::VolumeProfile | ClusterKind::DeltaProfile => wick_x_for(cell_center_x),
         }
     };
 
@@ -1484,6 +1448,11 @@ fn effective_cluster_qty(
             .values()
             .map(|group| (group.buy_qty - group.sell_qty).abs())
             .fold(0.0_f32, f32::max),
+        ClusterKind::VolumeProfile => footprint
+            .trades
+            .values()
+            .map(|group| group.buy_qty + group.sell_qty)
+            .fold(0.0_f32, f32::max),
     };
 
     let safe = |v: f32| if v <= f32::EPSILON { 1.0 } else { v };
@@ -1526,7 +1495,7 @@ fn draw_clusters(
     let content_right = x_position + (cell_width / 2.0) - inset;
 
     match cluster_kind {
-        ClusterKind::DeltaProfile => {
+        ClusterKind::VolumeProfile | ClusterKind::DeltaProfile => {
             let area = ProfileArea::new(
                 content_left,
                 content_right,
@@ -1540,6 +1509,34 @@ fn draw_clusters(
                 let y = price_to_y(*price);
 
                 match cluster_kind {
+                    ClusterKind::VolumeProfile => {
+                        super::draw_volume_bar(
+                            frame,
+                            area.bars_left,
+                            y,
+                            group.buy_qty,
+                            group.sell_qty,
+                            max_cluster_qty,
+                            area.bars_width,
+                            cell_height,
+                            palette.success.base.color,
+                            palette.danger.base.color,
+                            bar_alpha,
+                            true,
+                        );
+
+                        if show_text {
+                            draw_cluster_text(
+                                frame,
+                                &abbr_large_numbers(group.total_qty()),
+                                Point::new(area.bars_left, y),
+                                text_size,
+                                text_color,
+                                Alignment::Start,
+                                Alignment::Center,
+                            );
+                        }
+                    }
                     ClusterKind::DeltaProfile => {
                         let delta = group.delta_qty();
                         if show_text {
