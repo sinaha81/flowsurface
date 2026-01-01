@@ -12,16 +12,14 @@ use palette::{
 };
 use serde::{Deserialize, Serialize};
 
-/// ساختار نگهدارنده تم برنامه (پوششی بر روی تم Iced)
 #[derive(Debug, Clone)]
 pub struct Theme(pub iced_core::Theme);
 
-/// ساختار کمکی برای سریال‌سازی تم
 #[derive(Serialize, Deserialize)]
 struct SerTheme {
-    name: String, // نام تم
+    name: String,
     #[serde(skip_serializing_if = "Option::is_none")]
-    palette: Option<Palette>, // پالت رنگی (برای تم‌های سفارشی)
+    palette: Option<Palette>,
 }
 
 impl Default for Theme {
@@ -36,7 +34,6 @@ impl From<Theme> for iced_core::Theme {
     }
 }
 
-/// ایجاد تم پیش‌فرض برنامه (Flowsurface)
 pub fn default_theme() -> Custom {
     Custom::new(
         "Flowsurface".to_string(),
@@ -163,7 +160,6 @@ impl<'de> Deserialize<'de> for Theme {
     }
 }
 
-/// تبدیل کد رنگ هگز (Hex) به ساختار Color
 pub fn hex_to_color(hex: &str) -> Option<Color> {
     if hex.len() == 7 || hex.len() == 9 {
         let hash = &hex[0..1];
@@ -194,7 +190,6 @@ pub fn hex_to_color(hex: &str) -> Option<Color> {
     None
 }
 
-/// تبدیل ساختار Color به کد رنگ هگز (Hex)
 pub fn color_to_hex(color: Color) -> String {
     use std::fmt::Write;
 
@@ -247,7 +242,6 @@ fn to_rgba(color: Color) -> Rgba {
     }
 }
 
-/// تیره کردن یک رنگ به میزان مشخص
 pub fn darken(color: Color, amount: f32) -> Color {
     let mut hsl = to_hsl(color);
 
@@ -260,7 +254,6 @@ pub fn darken(color: Color, amount: f32) -> Color {
     from_hsl(hsl)
 }
 
-/// روشن کردن یک رنگ به میزان مشخص
 pub fn lighten(color: Color, amount: f32) -> Color {
     let mut hsl = to_hsl(color);
 
@@ -304,7 +297,6 @@ fn to_hsl(color: Color) -> Hsl {
     }
 }
 
-/// بررسی اینکه آیا یک رنگ تیره است یا خیر (بر اساس روشنایی)
 pub fn is_dark(color: Color) -> bool {
     let brightness = (color.r * 299.0 + color.g * 587.0 + color.b * 114.0) / 1000.0;
     brightness < 0.5

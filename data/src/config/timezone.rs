@@ -3,16 +3,15 @@ use std::fmt;
 use chrono::DateTime;
 use serde::{Deserialize, Serialize};
 
-/// انواع مناطق زمانی قابل انتخاب توسط کاربر
 #[derive(Debug, Clone, Copy, PartialEq, Default)]
 pub enum UserTimezone {
     #[default]
-    Utc,   // زمان هماهنگ جهانی (UTC)
-    Local, // زمان محلی سیستم کاربر
+    Utc,
+    Local,
 }
 
 impl UserTimezone {
-    /// تبدیل برچسب زمانی UTC به منطقه زمانی مناسب و قالب‌بندی آن بر اساس بازه زمانی (Timeframe)
+    /// Converts UTC timestamp to the appropriate timezone and formats it according to timeframe
     pub fn format_timestamp(&self, timestamp: i64, timeframe: exchange::Timeframe) -> String {
         if let Some(datetime) = DateTime::from_timestamp(timestamp, 0) {
             match self {
@@ -30,7 +29,7 @@ impl UserTimezone {
         }
     }
 
-    /// قالب‌بندی یک شیء `DateTime` بر اساس بازه زمانی
+    /// Formats a `DateTime` with appropriate format based on timeframe
     fn format_by_timeframe<Tz: chrono::TimeZone>(
         datetime: &DateTime<Tz>,
         timeframe: exchange::Timeframe,
@@ -41,18 +40,15 @@ impl UserTimezone {
         let interval = timeframe.to_milliseconds();
 
         if interval < 10000 {
-            // برای بازه‌های زمانی بسیار کوتاه (کمتر از ۱۰ ثانیه)
             datetime.format("%M:%S").to_string()
         } else if datetime.format("%H:%M").to_string() == "00:00" {
-            // برای شروع روز جدید
             datetime.format("%-d").to_string()
         } else {
-            // برای سایر موارد
             datetime.format("%H:%M").to_string()
         }
     }
 
-    /// قالب‌بندی برچسب زمانی برای نمایش در محل نشانگر (Crosshair) با جزئیات بیشتر
+    /// Formats a `DateTime` with detailed format for crosshair display
     pub fn format_crosshair_timestamp(&self, timestamp_millis: i64, interval: u64) -> String {
         if let Some(datetime) = DateTime::from_timestamp_millis(timestamp_millis) {
             if interval < 10000 {

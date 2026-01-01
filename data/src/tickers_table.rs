@@ -4,14 +4,13 @@ use exchange::{
 };
 use serde::{Deserialize, Serialize};
 
-/// تنظیمات مربوط به جدول نمادهای معاملاتی
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct Settings {
-    pub favorited_tickers: Vec<Ticker>,      // لیست نمادهای مورد علاقه
-    pub show_favorites: bool,                // نمایش فقط مورد علاقه‌ها
-    pub selected_sort_option: SortOptions,   // گزینه مرتب‌سازی انتخاب شده
-    pub selected_exchanges: Vec<ExchangeInclusive>, // صرافی‌های انتخاب شده
-    pub selected_markets: Vec<MarketKind>,   // بازارهای انتخاب شده (Spot, Futures, ...)
+    pub favorited_tickers: Vec<Ticker>,
+    pub show_favorites: bool,
+    pub selected_sort_option: SortOptions,
+    pub selected_exchanges: Vec<ExchangeInclusive>,
+    pub selected_markets: Vec<MarketKind>,
 }
 
 impl Default for Settings {
@@ -26,48 +25,43 @@ impl Default for Settings {
     }
 }
 
-/// گزینه‌های مرتب‌سازی جدول
 #[derive(Default, Debug, Clone, Copy, PartialEq, Deserialize, Serialize)]
 pub enum SortOptions {
     #[default]
-    VolumeAsc,  // حجم صعودی
-    VolumeDesc, // حجم نزولی
-    ChangeAsc,  // تغییرات صعودی
-    ChangeDesc, // تغییرات نزولی
+    VolumeAsc,
+    VolumeDesc,
+    ChangeAsc,
+    ChangeDesc,
 }
 
-/// جهت تغییر قیمت
 #[derive(Clone, Debug, PartialEq)]
 pub enum PriceChangeDirection {
-    Increased, // افزایش یافته
-    Decreased, // کاهش یافته
-    Unchanged, // بدون تغییر
+    Increased,
+    Decreased,
+    Unchanged,
 }
 
-/// داده‌های خام یک ردیف در جدول نمادها
 #[derive(Clone, Copy)]
 pub struct TickerRowData {
-    pub exchange: Exchange,                 // صرافی
-    pub ticker: Ticker,                     // نماد
-    pub stats: TickerStats,                 // آمار فعلی
-    pub previous_stats: Option<TickerStats>, // آمار قبلی (برای مقایسه)
-    pub is_favorited: bool,                 // آیا در لیست علاقه‌مندی‌هاست؟
+    pub exchange: Exchange,
+    pub ticker: Ticker,
+    pub stats: TickerStats,
+    pub previous_stats: Option<TickerStats>,
+    pub is_favorited: bool,
 }
 
-/// داده‌های آماده برای نمایش در رابط کاربری
 #[derive(Clone)]
 pub struct TickerDisplayData {
-    pub display_ticker: String,               // نام نمایشی نماد
-    pub daily_change_pct: String,             // درصد تغییرات روزانه
-    pub volume_display: String,               // حجم نمایشی (اختصاری)
-    pub mark_price_display: String,           // قیمت لحظه‌ای نمایشی
-    pub price_unchanged_part: String,         // بخش بدون تغییر قیمت (برای هایلایت)
-    pub price_changed_part: String,           // بخش تغییر یافته قیمت
-    pub price_change_direction: PriceChangeDirection, // جهت تغییر قیمت
-    pub card_color_alpha: f32,                // شفافیت رنگ کارت بر اساس تغییرات
+    pub display_ticker: String,
+    pub daily_change_pct: String,
+    pub volume_display: String,
+    pub mark_price_display: String,
+    pub price_unchanged_part: String,
+    pub price_changed_part: String,
+    pub price_change_direction: PriceChangeDirection,
+    pub card_color_alpha: f32,
 }
 
-/// محاسبه داده‌های نمایشی بر اساس آمار فعلی و قیمت قبلی
 pub fn compute_display_data(
     ticker: &Ticker,
     stats: &TickerStats,
@@ -99,7 +93,6 @@ pub fn compute_display_data(
     }
 }
 
-/// تشخیص بخش‌های تغییر یافته و ثابت قیمت برای هایلایت کردن در UI
 fn split_price_changes(
     previous_price: f32,
     current_price: f32,
@@ -125,7 +118,6 @@ fn split_price_changes(
     let prev_chars: Vec<char> = prev_str.chars().collect();
     let curr_chars: Vec<char> = curr_str.chars().collect();
 
-    // پیدا کردن اولین کاراکتری که تغییر کرده است
     for (i, &curr_char) in curr_chars.iter().enumerate() {
         if i >= prev_chars.len() || prev_chars[i] != curr_char {
             split_index = i;

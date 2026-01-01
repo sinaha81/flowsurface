@@ -7,11 +7,10 @@ use serde::{Deserialize, Serialize};
 
 use crate::aggr::time::DataPoint;
 
-/// ساختار نگهدارنده داده‌های یک کندل و معاملات مربوط به آن (فوت‌پرینت)
 #[derive(Clone)]
 pub struct KlineDataPoint {
-    pub kline: Kline,          // داده‌های کندل‌استیک (OHLCV)
-    pub footprint: KlineTrades, // داده‌های فوت‌پرینت (معاملات در سطوح قیمتی)
+    pub kline: Kline,
+    pub footprint: KlineTrades,
 }
 
 impl KlineDataPoint {
@@ -21,10 +20,6 @@ impl KlineDataPoint {
             ClusterKind::DeltaProfile => self
                 .footprint
                 .max_qty_by(highest, lowest, |buy, sell| (buy - sell).abs()),
-            ClusterKind::VolumeProfile => {
-                self.footprint
-                    .max_qty_by(highest, lowest, |buy, sell| buy + sell)
-            }
         }
     }
 
@@ -91,15 +86,14 @@ impl DataPoint for KlineDataPoint {
     }
 }
 
-/// ساختار گروه‌بندی معاملات در یک سطح قیمتی خاص
 #[derive(Debug, Clone, Default)]
 pub struct GroupedTrades {
-    pub buy_qty: f32,      // مجموع حجم خرید
-    pub sell_qty: f32,     // مجموع حجم فروش
-    pub first_time: u64,   // زمان اولین معامله در این سطح
-    pub last_time: u64,    // زمان آخرین معامله در این سطح
-    pub buy_count: usize,  // تعداد معاملات خرید
-    pub sell_count: usize, // تعداد معاملات فروش
+    pub buy_qty: f32,
+    pub sell_qty: f32,
+    pub first_time: u64,
+    pub last_time: u64,
+    pub buy_count: usize,
+    pub sell_count: usize,
 }
 
 impl GroupedTrades {
@@ -134,11 +128,10 @@ impl GroupedTrades {
     }
 }
 
-/// ساختار نگهدارنده تمامی معاملات انجام شده در بازه یک کندل
 #[derive(Debug, Clone, Default)]
 pub struct KlineTrades {
-    pub trades: FxHashMap<Price, GroupedTrades>, // نگاشت قیمت به معاملات گروه‌بندی شده
-    pub poc: Option<PointOfControl>,             // نقطه کنترل (POC) این کندل
+    pub trades: FxHashMap<Price, GroupedTrades>,
+    pub poc: Option<PointOfControl>,
 }
 
 impl KlineTrades {
@@ -181,7 +174,6 @@ impl KlineTrades {
             .or_insert_with(|| GroupedTrades::new(trade));
     }
 
-    /// محاسبه حداکثر مقدار (حجم، دلتا و غیره) در یک محدوده قیمتی
     pub fn max_qty_by<F>(&self, highest: Price, lowest: Price, f: F) -> f32
     where
         F: Fn(f32, f32) -> f32,
@@ -195,7 +187,6 @@ impl KlineTrades {
         max_qty
     }
 
-    /// محاسبه نقطه کنترل (POC) بر اساس بیشترین حجم معامله شده
     pub fn calculate_poc(&mut self) {
         if self.trades.is_empty() {
             return;
@@ -235,60 +226,41 @@ impl KlineTrades {
     }
 }
 
-/// انواع نمودارهای کندل‌استیک
 #[derive(Debug, Clone, PartialEq, Eq, Default, Deserialize, Serialize)]
 pub enum KlineChartKind {
     #[default]
-    Candles, // نمودار کندل‌استیک معمولی
+    Candles,
     Footprint {
-        clusters: ClusterKind,             // نوع خوشه‌های فوت‌پرینت
+        clusters: ClusterKind,
         #[serde(default)]
-        scaling: ClusterScaling,           // روش مقیاس‌بندی خوشه‌ها
-        studies: Vec<FootprintStudy>,      // مطالعات فوت‌پرینت (مانند NPoC)
+        scaling: ClusterScaling,
+        studies: Vec<FootprintStudy>,
     },
 }
 
 impl KlineChartKind {
     pub fn min_scaling(&self) -> f32 {
-        match self {
-            KlineChartKind::Footprint { .. } => 0.4,
-            KlineChartKind::Candles => 0.6,
-        }
+        0.01
     }
 
     pub fn max_scaling(&self) -> f32 {
-        match self {
-            KlineChartKind::Footprint { .. } => 1.2,
-            KlineChartKind::Candles => 2.5,
-        }
+        1000.0
     }
 
     pub fn max_cell_width(&self) -> f32 {
-        match self {
-            KlineChartKind::Footprint { .. } => 360.0,
-            KlineChartKind::Candles => 16.0,
-        }
+        500.0
     }
 
     pub fn min_cell_width(&self) -> f32 {
-        match self {
-            KlineChartKind::Footprint { .. } => 80.0,
-            KlineChartKind::Candles => 1.0,
-        }
+        0.1
     }
 
     pub fn max_cell_height(&self) -> f32 {
-        match self {
-            KlineChartKind::Footprint { .. } => 90.0,
-            KlineChartKind::Candles => 8.0,
-        }
+        500.0
     }
 
     pub fn min_cell_height(&self) -> f32 {
-        match self {
-            KlineChartKind::Footprint { .. } => 1.0,
-            KlineChartKind::Candles => 0.001,
-        }
+        0.001
     }
 
     pub fn default_cell_width(&self) -> f32 {
@@ -299,19 +271,17 @@ impl KlineChartKind {
     }
 }
 
-/// انواع خوشه‌های فوت‌پرینت
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Default, Deserialize, Serialize)]
 pub enum ClusterKind {
     #[default]
-    BidAsk,        // نمایش حجم خرید و فروش (Bid/Ask)
-    VolumeProfile, // نمایش پروفایل حجم
-    DeltaProfile,  // نمایش پروفایل دلتا (تفاضل خرید و فروش)
+    BidAsk,
+    DeltaProfile,
 }
 
 impl ClusterKind {
-    pub const ALL: [ClusterKind; 3] = [
+    pub const ALL: [ClusterKind; 2] = [
         ClusterKind::BidAsk,
-        ClusterKind::VolumeProfile,
+
         ClusterKind::DeltaProfile,
     ];
 }
@@ -320,7 +290,7 @@ impl std::fmt::Display for ClusterKind {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             ClusterKind::BidAsk => write!(f, "Bid/Ask"),
-            ClusterKind::VolumeProfile => write!(f, "Volume Profile"),
+
             ClusterKind::DeltaProfile => write!(f, "Delta Profile"),
         }
     }
@@ -329,15 +299,15 @@ impl std::fmt::Display for ClusterKind {
 #[derive(Debug, Default, Copy, Clone, PartialEq, Deserialize, Serialize)]
 pub struct Config {}
 
-/// روش‌های مقیاس‌بندی خوشه‌های فوت‌پرینت
 #[derive(Default, Clone, Copy, Debug, PartialEq, Deserialize, Serialize)]
 pub enum ClusterScaling {
     #[default]
-    /// مقیاس‌بندی بر اساس حداکثر مقدار در محدوده قابل مشاهده
+    /// Scale based on the maximum quantity in the visible range.
     VisibleRange,
-    /// ترکیبی از مقیاس‌بندی محدوده قابل مشاهده و مقیاس‌بندی انفرادی هر کندل
+    /// Blend global VisibleRange and per-cluster Individual using a weight in [0.0, 1.0].
+    /// weight = fraction of global contribution (1.0 == all-global, 0.0 == all-individual).
     Hybrid { weight: f32 },
-    /// مقیاس‌بندی انفرادی بر اساس حداکثر مقدار در هر کندل
+    /// Scale based only on the maximum quantity inside the datapoint (per-candle).
     Datapoint,
 }
 
@@ -361,16 +331,15 @@ impl std::fmt::Display for ClusterScaling {
 
 impl std::cmp::Eq for ClusterScaling {}
 
-/// مطالعات و ابزارهای تحلیلی فوت‌پرینت
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
 pub enum FootprintStudy {
     NPoC {
-        lookback: usize, // تعداد کندل‌های بازگشتی برای بررسی
+        lookback: usize,
     },
     Imbalance {
-        threshold: usize,           // آستانه عدم تعادل (درصد)
-        color_scale: Option<usize>, // مقیاس رنگی
-        ignore_zeros: bool,         // نادیده گرفتن مقادیر صفر
+        threshold: usize,
+        color_scale: Option<usize>,
+        ignore_zeros: bool,
     },
 }
 
@@ -407,12 +376,11 @@ impl std::fmt::Display for FootprintStudy {
     }
 }
 
-/// ساختار نگهدارنده اطلاعات نقطه کنترل (POC)
 #[derive(Debug, Clone, Copy)]
 pub struct PointOfControl {
-    pub price: Price,  // قیمت POC
-    pub volume: f32,   // حجم در این قیمت
-    pub status: NPoc,  // وضعیت لمس شدن (Naked یا Filled)
+    pub price: Price,
+    pub volume: f32,
+    pub status: NPoc,
 }
 
 impl Default for PointOfControl {
@@ -425,14 +393,13 @@ impl Default for PointOfControl {
     }
 }
 
-/// وضعیت نقطه کنترل عریان (Naked Point of Control)
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub enum NPoc {
     #[default]
-    None,   // وضعیتی تعریف نشده
-    Naked,  // عریان (توسط قیمت‌های بعدی لمس نشده)
+    None,
+    Naked,
     Filled {
-        at: u64, // زمانی که لمس شده است
+        at: u64,
     },
 }
 

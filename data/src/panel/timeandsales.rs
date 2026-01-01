@@ -7,14 +7,13 @@ use crate::util::ok_or_default;
 
 const TRADE_RETENTION_MS: u64 = 120_000;
 
-/// تنظیمات مربوط به لیست معاملات (Time and Sales)
 #[derive(Debug, Copy, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Config {
-    pub trade_size_filter: f32, // فیلتر حداقل اندازه معامله برای نمایش
+    pub trade_size_filter: f32,
     #[serde(default = "default_buffer_filter")]
-    pub trade_retention: Duration, // مدت زمان نگهداشت معاملات در لیست
+    pub trade_retention: Duration,
     #[serde(deserialize_with = "ok_or_default", default)]
-    pub stacked_bar: Option<StackedBar>, // تنظیمات نوار انباشته (Stacked Bar) در پایین لیست
+    pub stacked_bar: Option<StackedBar>,
 }
 
 impl Default for Config {
@@ -31,27 +30,24 @@ fn default_buffer_filter() -> Duration {
     Duration::from_millis(TRADE_RETENTION_MS)
 }
 
-/// ساختار داده‌ای برای نمایش یک معامله در لیست
 #[derive(Debug, Clone)]
 pub struct TradeDisplay {
-    pub time_str: String, // رشته متنی زمان معامله
-    pub price: Price,     // قیمت معامله
-    pub qty: f32,         // مقدار معامله
-    pub is_sell: bool,    // آیا معامله فروش است؟
+    pub time_str: String,
+    pub price: Price,
+    pub qty: f32,
+    pub is_sell: bool,
 }
 
-/// ورودی یک معامله در حافظه به همراه برچسب زمانی خام
 #[derive(Debug, Clone)]
 pub struct TradeEntry {
-    pub ts_ms: u64,           // برچسب زمانی به میلی‌ثانیه
-    pub display: TradeDisplay, // اطلاعات نمایشی معامله
+    pub ts_ms: u64,
+    pub display: TradeDisplay,
 }
 
-/// انواع نمایش نوار انباشته (Stacked Bar)
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize, Copy)]
 pub enum StackedBar {
-    Compact(StackedBarRatio), // حالت فشرده
-    Full(StackedBarRatio),    // حالت کامل
+    Compact(StackedBarRatio),
+    Full(StackedBarRatio),
 }
 
 impl StackedBar {
@@ -69,13 +65,12 @@ impl StackedBar {
     }
 }
 
-/// مبنای محاسبه نسبت در نوار انباشته
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, Serialize, Default, Copy)]
 pub enum StackedBarRatio {
-    Count,       // بر اساس تعداد معاملات
+    Count,
     #[default]
-    Volume,      // بر اساس حجم معاملات
-    AverageSize, // بر اساس میانگین اندازه معاملات
+    Volume,
+    AverageSize,
 }
 
 impl std::fmt::Display for StackedBarRatio {
@@ -96,13 +91,12 @@ impl StackedBarRatio {
     ];
 }
 
-/// ساختار نگهدارنده تجمیع تاریخچه معاملات برای محاسبه نسبت‌ها
 #[derive(Default)]
 pub struct HistAgg {
-    buy_count: u64,  // تعداد کل خریدها
-    sell_count: u64, // تعداد کل فروش‌ها
-    buy_sum: f64,    // مجموع حجم خریدها
-    sell_sum: f64,   // مجموع حجم فروش‌ها
+    buy_count: u64,
+    sell_count: u64,
+    buy_sum: f64,
+    sell_sum: f64,
 }
 
 impl HistAgg {
@@ -130,7 +124,6 @@ impl HistAgg {
         }
     }
 
-    /// دریافت مقادیر و نسبت خرید بر اساس نوع مبنای انتخاب شده
     pub fn values_for(&self, ratio_kind: StackedBarRatio) -> Option<(f64, f64, f32)> {
         match ratio_kind {
             StackedBarRatio::Count => {

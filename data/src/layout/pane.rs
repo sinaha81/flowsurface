@@ -13,29 +13,24 @@ use crate::chart::{
     kline::KlineChartKind,
 };
 
-/// محور تقسیم‌بندی پنل‌ها
 #[derive(Debug, Clone, Copy, Deserialize, Serialize)]
 pub enum Axis {
-    Horizontal, // افقی
-    Vertical,   // عمودی
+    Horizontal,
+    Vertical,
 }
 
-/// انواع مختلف پنل‌ها در رابط کاربری
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub enum Pane {
-    /// پنل تقسیم شده به دو بخش
     Split {
-        axis: Axis,      // محور تقسیم
-        ratio: f32,      // نسبت تقسیم
-        a: Box<Pane>,    // بخش اول
-        b: Box<Pane>,    // بخش دوم
+        axis: Axis,
+        ratio: f32,
+        a: Box<Pane>,
+        b: Box<Pane>,
     },
-    /// پنل شروع (Starter) برای انتخاب نوع محتوا
     Starter {
         #[serde(deserialize_with = "ok_or_default", default)]
-        link_group: Option<LinkGroup>, // گروه پیوند (Link Group)
+        link_group: Option<LinkGroup>,
     },
-    /// نمودار نقشه حرارتی (Heatmap)
     HeatmapChart {
         layout: ViewConfig,
         #[serde(deserialize_with = "ok_or_default", default)]
@@ -47,9 +42,10 @@ pub enum Pane {
         #[serde(deserialize_with = "ok_or_default", default)]
         indicators: Vec<HeatmapIndicator>,
         #[serde(deserialize_with = "ok_or_default", default)]
+        modular_indicators: Vec<String>,
+        #[serde(deserialize_with = "ok_or_default", default)]
         link_group: Option<LinkGroup>,
     },
-    /// نمودار کندل‌استیک یا فوت‌پرینت
     KlineChart {
         layout: ViewConfig,
         kind: KlineChartKind,
@@ -60,9 +56,10 @@ pub enum Pane {
         #[serde(deserialize_with = "ok_or_default", default)]
         indicators: Vec<KlineIndicator>,
         #[serde(deserialize_with = "ok_or_default", default)]
+        modular_indicators: Vec<String>,
+        #[serde(deserialize_with = "ok_or_default", default)]
         link_group: Option<LinkGroup>,
     },
-    /// نمودار مقایسه‌ای
     ComparisonChart {
         stream_type: Vec<PersistStreamKind>,
         #[serde(deserialize_with = "ok_or_default")]
@@ -70,14 +67,12 @@ pub enum Pane {
         #[serde(deserialize_with = "ok_or_default", default)]
         link_group: Option<LinkGroup>,
     },
-    /// لیست معاملات (Time and Sales)
     TimeAndSales {
         stream_type: Vec<PersistStreamKind>,
         settings: Settings,
         #[serde(deserialize_with = "ok_or_default", default)]
         link_group: Option<LinkGroup>,
     },
-    /// نردبان قیمت (Ladder/DOM)
     Ladder {
         stream_type: Vec<PersistStreamKind>,
         settings: Settings,
@@ -92,19 +87,25 @@ impl Default for Pane {
     }
 }
 
-/// تنظیمات عمومی یک پنل
 #[derive(Debug, Clone, Deserialize, Serialize, Default)]
 #[serde(default)]
 pub struct Settings {
-    pub tick_multiply: Option<exchange::TickMultiplier>, // ضریب گام قیمت
-    pub visual_config: Option<VisualConfig>,             // تنظیمات بصری اختصاصی
-    pub selected_basis: Option<Basis>,                   // مبنای انتخاب شده (زمان یا تیک)
+    pub tick_multiply: Option<exchange::TickMultiplier>,
+    pub visual_config: Option<VisualConfig>,
+    pub selected_basis: Option<Basis>,
 }
 
-/// گروه‌های پیوند برای همگام‌سازی نمادها بین پنل‌های مختلف
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Deserialize, Serialize)]
 pub enum LinkGroup {
-    A, B, C, D, E, F, G, H, I,
+    A,
+    B,
+    C,
+    D,
+    E,
+    F,
+    G,
+    H,
+    I,
 }
 
 impl LinkGroup {
@@ -139,14 +140,13 @@ impl std::fmt::Display for LinkGroup {
 }
 
 /// Defines the specific configuration for different types of pane settings.
-/// تنظیمات بصری اختصاصی برای هر نوع پنل
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub enum VisualConfig {
-    Heatmap(heatmap::Config),           // تنظیمات نقشه حرارتی
-    TimeAndSales(timeandsales::Config), // تنظیمات لیست معاملات
-    Kline(kline::Config),               // تنظیمات کندل‌استیک
-    Ladder(ladder::Config),             // تنظیمات نردبان قیمت
-    Comparison(comparison::Config),     // تنظیمات نمودار مقایسه‌ای
+    Heatmap(heatmap::Config),
+    TimeAndSales(timeandsales::Config),
+    Kline(kline::Config),
+    Ladder(ladder::Config),
+    Comparison(comparison::Config),
 }
 
 impl VisualConfig {
@@ -186,16 +186,15 @@ impl VisualConfig {
     }
 }
 
-/// انواع محتواهای قابل نمایش در پنل‌ها
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum ContentKind {
-    Starter,          // پنل شروع
-    HeatmapChart,     // نمودار نقشه حرارتی
-    FootprintChart,   // نمودار فوت‌پرینت
-    CandlestickChart, // نمودار کندل‌استیک
-    ComparisonChart,  // نمودار مقایسه‌ای
-    TimeAndSales,     // لیست معاملات
-    Ladder,           // نردبان قیمت
+    Starter,
+    HeatmapChart,
+    FootprintChart,
+    CandlestickChart,
+    ComparisonChart,
+    TimeAndSales,
+    Ladder,
 }
 
 impl ContentKind {
@@ -225,15 +224,14 @@ impl std::fmt::Display for ContentKind {
     }
 }
 
-/// ساختار کمکی برای راه‌اندازی و تنظیم اولیه یک پنل
 #[derive(Clone, Copy)]
 pub struct PaneSetup {
-    pub ticker_info: exchange::TickerInfo,            // اطلاعات نماد
-    pub basis: Option<Basis>,                         // مبنای زمانی یا تیکی
-    pub tick_multiplier: Option<TickMultiplier>,      // ضریب گام قیمت
-    pub tick_size: f32,                               // اندازه گام قیمت نهایی
-    pub depth_aggr: exchange::adapter::StreamTicksize, // تنظیمات تجمیع عمق بازار
-    pub push_freq: exchange::PushFrequency,           // فرکانس ارسال داده‌ها
+    pub ticker_info: exchange::TickerInfo,
+    pub basis: Option<Basis>,
+    pub tick_multiplier: Option<TickMultiplier>,
+    pub tick_size: f32,
+    pub depth_aggr: exchange::adapter::StreamTicksize,
+    pub push_freq: exchange::PushFrequency,
 }
 
 impl PaneSetup {
@@ -274,18 +272,18 @@ impl PaneSetup {
         let tick_multiplier = match content_kind {
             ContentKind::HeatmapChart | ContentKind::Ladder => {
                 let tm = if !is_client_aggr && prev_is_client_aggr {
-                    TickMultiplier(10)
+                    TickMultiplier(10.0)
                 } else if let Some(tm) = current_tick_multiplier {
                     tm
                 } else if is_client_aggr {
-                    TickMultiplier(5)
+                    TickMultiplier(5.0)
                 } else {
-                    TickMultiplier(10)
+                    TickMultiplier(10.0)
                 };
                 Some(tm)
             }
             ContentKind::FootprintChart => {
-                Some(current_tick_multiplier.unwrap_or(TickMultiplier(50)))
+                Some(current_tick_multiplier.unwrap_or(TickMultiplier(50.0)))
             }
             ContentKind::CandlestickChart
             | ContentKind::ComparisonChart
@@ -298,7 +296,7 @@ impl PaneSetup {
             None => base_ticker.min_ticksize.into(),
         };
 
-        let depth_aggr = exchange.stream_ticksize(tick_multiplier, TickMultiplier(50));
+        let depth_aggr = exchange.stream_ticksize(tick_multiplier, TickMultiplier(50.0));
 
         let push_freq = match content_kind {
             ContentKind::HeatmapChart if exchange.is_custom_push_freq() => match basis {

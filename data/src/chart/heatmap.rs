@@ -13,13 +13,12 @@ pub const CLEANUP_THRESHOLD: usize = 4800;
 /// Prevents fragmentation(e.g. network latency) when qty and is_bid remain unchanged.
 const GRACE_PERIOD_MS: u64 = 500;
 
-/// تنظیمات مربوط به نقشه حرارتی (Heatmap)
 #[derive(Debug, Copy, Clone, PartialEq, Deserialize, Serialize)]
 pub struct Config {
-    pub trade_size_filter: f32,      // فیلتر اندازه معاملات
-    pub order_size_filter: f32,      // فیلتر اندازه سفارشات
-    pub trade_size_scale: Option<i32>, // مقیاس اندازه معاملات
-    pub coalescing: Option<CoalesceKind>, // نوع تجمیع سفارشات مشابه
+    pub trade_size_filter: f32,
+    pub order_size_filter: f32,
+    pub trade_size_scale: Option<i32>,
+    pub coalescing: Option<CoalesceKind>,
 }
 
 impl Default for Config {
@@ -33,10 +32,9 @@ impl Default for Config {
     }
 }
 
-/// ساختار نقطه داده برای نقشه حرارتی
 pub struct HeatmapDataPoint {
-    pub grouped_trades: Box<[GroupedTrade]>, // معاملات گروه‌بندی شده در سطوح قیمتی
-    pub buy_sell: (f32, f32),                // مجموع حجم خرید و فروش
+    pub grouped_trades: Box<[GroupedTrade]>,
+    pub buy_sell: (f32, f32),
 }
 
 impl DataPoint for HeatmapDataPoint {
@@ -109,13 +107,12 @@ impl DataPoint for HeatmapDataPoint {
     }
 }
 
-/// ساختار نگهدارنده اطلاعات یک "اجرای سفارش" (Order Run) در یک سطح قیمتی
 #[derive(Default, Debug, Clone, Copy, PartialEq)]
 pub struct OrderRun {
-    pub start_time: u64, // زمان شروع
-    pub until_time: u64, // زمان پایان (یا آخرین بروزرسانی)
-    qty: f32,            // مقدار سفارش
-    pub is_bid: bool,    // آیا سفارش خرید (Bid) است؟
+    pub start_time: u64,
+    pub until_time: u64,
+    qty: f32,
+    pub is_bid: bool,
 }
 
 impl OrderRun {
@@ -141,13 +138,12 @@ impl OrderRun {
     }
 }
 
-/// ساختار نگهدارنده تاریخچه عمق بازار (Historical Depth)
 #[derive(Default, Debug, Clone, PartialEq)]
 pub struct HistoricalDepth {
-    price_levels: BTreeMap<Price, Vec<OrderRun>>, // نگاشت قیمت به لیست اجرای سفارشات
-    aggr_time: u64,                               // زمان تجمیع
-    tick_size: PriceStep,                         // گام قیمت
-    min_order_qty: f32,                           // حداقل مقدار سفارش برای ثبت
+    price_levels: BTreeMap<Price, Vec<OrderRun>>,
+    aggr_time: u64,
+    tick_size: PriceStep,
+    min_order_qty: f32,
 }
 
 impl HistoricalDepth {
@@ -163,7 +159,6 @@ impl HistoricalDepth {
         }
     }
 
-    /// وارد کردن آخرین داده‌های عمق بازار به تاریخچه
     pub fn insert_latest_depth(&mut self, depth: &Depth, time: u64) {
         self.process_side(&depth.bids, time, true);
         self.process_side(&depth.asks, time, false);
@@ -193,14 +188,12 @@ impl HistoricalDepth {
         }
     }
 
-    /// بروزرسانی یک سطح قیمتی خاص در تاریخچه
     fn update_price_level(&mut self, time: u64, price: Price, qty: f32, is_bid: bool) {
         let price_level = self.price_levels.entry(price).or_default();
         let aggr_time = self.aggr_time;
 
         match price_level.last_mut() {
             Some(last_run) if last_run.is_bid == is_bid => {
-                // اگر زمان زیادی از آخرین بروزرسانی گذشته باشد، یک اجرای جدید شروع می‌شود
                 if time > last_run.until_time + GRACE_PERIOD_MS {
                     price_level.push(OrderRun::new(time, aggr_time, qty, is_bid));
                     return;
@@ -213,14 +206,12 @@ impl HistoricalDepth {
                     f32::INFINITY
                 };
 
-                // اگر تغییرات مقدار ناچیز باشد، زمان پایان اجرای فعلی تمدید می‌شود
                 if qty_diff_pct <= self.min_order_qty || last_run.qty == qty {
                     let new_until = time + aggr_time;
                     if new_until > last_run.until_time {
                         last_run.until_time = new_until;
                     }
                 } else {
-                    // در غیر این صورت، اجرای فعلی بسته شده و اجرای جدیدی شروع می‌شود
                     if last_run.until_time > time {
                         last_run.until_time = time;
                     }
@@ -269,7 +260,6 @@ impl HistoricalDepth {
             })
     }
 
-    /// پاکسازی سطوح قیمتی قدیمی که دیگر در محدوده زمانی نیستند
     pub fn cleanup_old_price_levels(&mut self, oldest_time: u64) {
         self.price_levels.iter_mut().for_each(|(_, runs)| {
             runs.retain(|run| run.until_time >= oldest_time);
@@ -490,12 +480,11 @@ impl HistoricalDepth {
 
 const FRACTIONAL_THRESHOLD: f32 = 0.00001;
 
-/// انواع روش‌های تجمیع سفارشات (Coalescing)
 #[derive(Debug, Clone, Copy, Deserialize, Serialize)]
 pub enum CoalesceKind {
-    First(f32),   // استفاده از مقدار اولین سفارش
-    Average(f32), // استفاده از میانگین مقادیر
-    Max(f32),     // استفاده از حداکثر مقدار
+    First(f32),
+    Average(f32),
+    Max(f32),
 }
 
 impl CoalesceKind {
@@ -522,7 +511,6 @@ impl PartialEq for CoalesceKind {
 
 impl Eq for CoalesceKind {}
 
-/// ساختار کمکی برای تجمیع چندین اجرای سفارش در یک اجرا
 #[derive(Debug, Clone, Copy, Deserialize, Serialize, PartialEq)]
 pub struct CoalescingRun {
     pub start_time: u64,
@@ -586,20 +574,18 @@ impl CoalescingRun {
     }
 }
 
-/// مقیاس مقادیر برای رندر کردن نقشه حرارتی
 #[derive(Default)]
 pub struct QtyScale {
-    pub max_trade_qty: f32,   // حداکثر مقدار معامله
-    pub max_aggr_volume: f32, // حداکثر حجم تجمیعی
-    pub max_depth_qty: f32,   // حداکثر مقدار عمق بازار
+    pub max_trade_qty: f32,
+    pub max_aggr_volume: f32,
+    pub max_depth_qty: f32,
 }
 
-/// ساختار معامله گروه‌بندی شده در یک سطح قیمتی
 #[derive(Debug, Clone)]
 pub struct GroupedTrade {
-    pub is_sell: bool, // آیا فروش است؟
-    pub price: Price,  // قیمت گروه‌بندی شده
-    pub qty: f32,      // مجموع مقدار معاملات در این قیمت
+    pub is_sell: bool,
+    pub price: Price,
+    pub qty: f32,
 }
 
 impl GroupedTrade {
@@ -614,34 +600,16 @@ impl GroupedTrade {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
 pub enum HeatmapStudy {
-    VolumeProfile(ProfileKind),
 }
 
 impl HeatmapStudy {
-    pub const ALL: [HeatmapStudy; 1] = [HeatmapStudy::VolumeProfile(ProfileKind::VisibleRange)];
+    pub const ALL: [HeatmapStudy; 0] = [];
 }
 
 impl std::fmt::Display for HeatmapStudy {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            HeatmapStudy::VolumeProfile(kind) => {
-                write!(f, "Volume Profile ({})", kind)
-            }
-        }
+    fn fmt(&self, _f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match *self {}
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
-pub enum ProfileKind {
-    FixedWindow(usize),
-    VisibleRange,
-}
 
-impl std::fmt::Display for ProfileKind {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            ProfileKind::FixedWindow(_) => write!(f, "Fixed window"),
-            ProfileKind::VisibleRange => write!(f, "Visible range"),
-        }
-    }
-}
