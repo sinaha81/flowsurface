@@ -7,19 +7,17 @@ use std::time::{Duration, Instant};
 
 pub static HTTP_CLIENT: LazyLock<Client> = LazyLock::new(Client::new);
 
-/// ویژگی (Trait) برای مدیریت محدودیت نرخ درخواست (Rate Limiting)
 pub trait RateLimiter: Send + Sync {
-    /// آماده‌سازی برای یک درخواست با وزن مشخص. در صورت نیاز زمان انتظار را برمی‌گرداند.
+    /// Prepare for a request with given weight. Returns wait time if needed.
     fn prepare_request(&mut self, weight: usize) -> Option<Duration>;
 
-    /// بروزرسانی محدودکننده با داده‌های پاسخ (مثلاً هدرهای مربوط به محدودیت نرخ)
+    /// Update the limiter with response data (e.g., rate limit headers)
     fn update_from_response(&mut self, response: &Response, weight: usize);
 
-    /// بررسی اینکه آیا پاسخ نشان‌دهنده رسیدن به محدودیت نرخ است و باید برنامه متوقف شود یا خیر
+    /// Check if response indicates rate limiting and should exit
     fn should_exit_on_response(&self, response: &Response) -> bool;
 }
 
-/// ارسال درخواست HTTP با رعایت محدودیت نرخ
 pub async fn http_request_with_limiter<L: RateLimiter>(
     url: &str,
     limiter: &tokio::sync::Mutex<L>,
@@ -117,12 +115,11 @@ where
 }
 
 /// Limiter for a fixed window rate
-/// محدودکننده نرخ بر اساس پنجره زمانی ثابت (Fixed Window)
 pub struct FixedWindowBucket {
-    max_tokens: usize,       // حداکثر توکن‌ها (وزن مجاز) در هر پنجره
-    available_tokens: usize, // توکن‌های موجود فعلی
-    last_refill: Instant,    // زمان آخرین شارژ مجدد
-    refill_rate: Duration,   // نرخ شارژ مجدد (طول پنجره زمانی)
+    max_tokens: usize,
+    available_tokens: usize,
+    last_refill: Instant,
+    refill_rate: Duration,
 }
 
 impl FixedWindowBucket {
@@ -170,22 +167,21 @@ impl FixedWindowBucket {
     }
 }
 
-/// دلیل محدودیت نرخ پویا
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum DynamicLimitReason {
-    HeaderRate,      // بر اساس هدرهای پاسخ صرافی
-    FixedWindowRate, // بر اساس پنجره زمانی ثابت (حالت جایگزین)
+    HeaderRate,
+    FixedWindowRate,
 }
 
-/// محدودکننده نرخ پویا که از گزارش‌های خود صرافی استفاده می‌کند
+/// Limiter that can be used when source reports the rate-limit usage
 ///
-/// در صورت عدم وجود داده از صرافی، به حالت پنجره زمانی ثابت (Fallback) سوئیچ می‌کند
+/// Can fallback to fixed window bucket
 pub struct DynamicBucket {
-    max_weight: usize,          // حداکثر وزن مجاز
-    current_used_weight: usize, // وزن استفاده شده فعلی (بر اساس گزارش صرافی)
-    last_updated: Instant,      // زمان آخرین بروزرسانی از صرافی
-    refill_rate: Duration,      // نرخ بازسازی
-    fallback_bucket: FixedWindowBucket, // سطل جایگزین برای مواقعی که داده‌ای در دسترس نیست
+    max_weight: usize,
+    current_used_weight: usize,
+    last_updated: Instant,
+    refill_rate: Duration,
+    fallback_bucket: FixedWindowBucket,
 }
 
 impl DynamicBucket {

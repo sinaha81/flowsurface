@@ -15,13 +15,13 @@ use serde_json::Value;
 use std::sync::atomic::{AtomicU8, Ordering};
 use std::{fmt, hash::Hash};
 
-/// واحد نمایش مقادیر حجم/تعداد
+/// Unit for displaying volume/quantity size values.
 ///
-/// - `Base`: نمایش بر اساس واحد ارز پایه (مثلاً BTC برای BTCUSDT)
-/// - `Quote`: نمایش بر اساس ارزش ارز کوت (مثلاً معادل USD/USDT)
+/// - `Base`: Display in base asset units (e.g., BTC for BTCUSDT)
+/// - `Quote`: Display in quote currency value (e.g., USD/USDT equivalent)
 ///
-/// نکته: فقط برای بازارهای فیوچرز خطی (Linear Perpetual) و اسپات (Spot) اعمال می‌شود.
-/// بازارهای فیوچرز معکوس (Inverse Perpetual) همیشه بر اساس USD نمایش داده می‌شوند.
+/// Note: Only applies to linear perpetuals and spot markets.
+/// Inverse perpetuals always display in USD regardless of this setting.
 #[repr(u8)]
 #[derive(Default, Copy, Clone, Debug, Eq, PartialEq, Hash, Deserialize, Serialize)]
 pub enum SizeUnit {
@@ -44,16 +44,16 @@ pub fn volume_size_unit() -> SizeUnit {
     }
 }
 
-/// فرکانس مورد نظر برای بروزرسانی‌های عمق دفتر سفارش (Orderbook Depth)
+/// Desired frequency for orderbook depth updates.
 ///
-/// فواصل زمانی انتخاب شده توسط کاربر را به سطوح عمق خاص هر صرافی نگاشت می‌کند.
-/// برای برخی صرافی‌ها که فرکانس ارسال را بر اساس سطح عمق اشتراک تعیین می‌کنند استفاده می‌شود
-/// (مثلاً Bybit برای عمق ۱۰۰۰ سطح هر ۳۰۰ میلی‌ثانیه و برای ۲۰۰ سطح هر ۱۰۰ میلی‌ثانیه داده ارسال می‌کند).
+/// Maps user-selected update intervals to exchange-specific depth levels.
+/// Used for some exchanges that determine push frequency based on subscribed depth level
+/// (e.g., Bybit pushes every 300ms for 1000-level depth, 100ms for 200-level).
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Hash, Deserialize, Serialize)]
 pub enum PushFrequency {
     #[default]
-    ServerDefault, // پیش‌فرض سرور
-    Custom(Timeframe), // بازه زمانی سفارشی
+    ServerDefault,
+    Custom(Timeframe),
 }
 
 impl std::fmt::Display for PushFrequency {
@@ -91,24 +91,23 @@ impl std::fmt::Display for Timeframe {
     }
 }
 
-/// بازه‌های زمانی مختلف (Timeframes)
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Deserialize, Serialize, PartialOrd, Ord)]
 pub enum Timeframe {
-    MS100,  // ۱۰۰ میلی‌ثانیه
-    MS200,  // ۲۰۰ میلی‌ثانیه
-    MS300,  // ۳۰۰ میلی‌ثانیه
-    MS500,  // ۵۰۰ میلی‌ثانیه
-    MS1000, // ۱ ثانیه
-    M1,     // ۱ دقیقه
-    M3,     // ۳ دقیقه
-    M5,     // ۵ دقیقه
-    M15,    // ۱۵ دقیقه
-    M30,    // ۳۰ دقیقه
-    H1,     // ۱ ساعت
-    H2,     // ۲ ساعت
-    H4,     // ۴ ساعت
-    H12,    // ۱۲ ساعت
-    D1,     // ۱ روز
+    MS100,
+    MS200,
+    MS300,
+    MS500,
+    MS1000,
+    M1,
+    M3,
+    M5,
+    M15,
+    M30,
+    H1,
+    H2,
+    H4,
+    H12,
+    D1,
 }
 
 impl Timeframe {
@@ -190,11 +189,11 @@ impl fmt::Display for InvalidTimeframe {
 
 impl std::error::Error for InvalidTimeframe {}
 
-/// نسخه قابل سریال‌سازی از جفت‌های (صرافی، نماد) که به عنوان کلید در نقشه‌ها استفاده می‌شود
+/// Serializable version of `(Exchange, Ticker)` tuples that is used for keys in maps
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct SerTicker {
-    pub exchange: Exchange, // صرافی
-    pub ticker: Ticker,     // نماد معاملاتی
+    pub exchange: Exchange,
+    pub ticker: Ticker,
 }
 
 impl SerTicker {
@@ -289,13 +288,12 @@ impl fmt::Display for SerTicker {
     }
 }
 
-/// ساختار نگهدارنده اطلاعات نماد معاملاتی (Ticker)
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Ticker {
-    bytes: [u8; Ticker::MAX_LEN as usize], // بایت‌های نام نماد
-    pub exchange: Exchange,               // صرافی مربوطه
-    // نماد نمایشی اختیاری برای رابط کاربری، عمدتاً برای بازارهای اسپات Hyperliquid استفاده می‌شود
-    // تا به جای "@107" عبارت "HYPEUSDC" را نشان دهد
+    bytes: [u8; Ticker::MAX_LEN as usize],
+    pub exchange: Exchange,
+    // Optional display symbol for UI, mainly used for Hyperliquid spot markets
+    // to show "HYPEUSDC" instead of "@107"
     display_bytes: [u8; Ticker::MAX_LEN as usize],
     has_display_symbol: bool,
 }
@@ -548,14 +546,13 @@ pub enum StreamPairKind {
     MultiSource(Vec<TickerInfo>),
 }
 
-/// اطلاعات تکمیلی یک نماد معاملاتی شامل گام قیمت و مقدار
 #[derive(Debug, Clone, Copy, PartialEq, Deserialize, Serialize, Hash, Eq)]
 pub struct TickerInfo {
     pub ticker: Ticker,
     #[serde(rename = "tickSize")]
-    pub min_ticksize: MinTicksize, // حداقل گام تغییر قیمت
-    pub min_qty: MinQtySize,       // حداقل مقدار معامله
-    pub contract_size: Option<ContractSize>, // اندازه قرارداد (برای فیوچرز)
+    pub min_ticksize: MinTicksize,
+    pub min_qty: MinQtySize,
+    pub contract_size: Option<ContractSize>,
 }
 
 impl TickerInfo {
@@ -587,25 +584,23 @@ impl TickerInfo {
     }
 }
 
-/// اطلاعات یک معامله انجام شده
 #[derive(Debug, Clone, Copy, Deserialize)]
 pub struct Trade {
-    pub time: u64,     // زمان معامله
+    pub time: u64,
     #[serde(deserialize_with = "bool_from_int")]
-    pub is_sell: bool, // آیا معامله فروش است؟
-    pub price: Price,  // قیمت معامله
-    pub qty: f32,      // مقدار معامله
+    pub is_sell: bool,
+    pub price: Price,
+    pub qty: f32,
 }
 
-/// اطلاعات یک کندل (Kline)
 #[derive(Debug, Clone, Copy)]
 pub struct Kline {
-    pub time: u64,          // زمان شروع کندل
-    pub open: Price,        // قیمت باز شدن
-    pub high: Price,        // بالاترین قیمت
-    pub low: Price,         // پایین‌ترین قیمت
-    pub close: Price,       // قیمت بسته شدن
-    pub volume: (f32, f32), // حجم (خرید، فروش)
+    pub time: u64,
+    pub open: Price,
+    pub high: Price,
+    pub low: Price,
+    pub close: Price,
+    pub volume: (f32, f32),
 }
 
 impl Kline {
@@ -661,15 +656,21 @@ where
     }
 }
 
-fn de_string_to_f32<'de, D>(deserializer: D) -> Result<f32, D::Error>
+pub fn de_string_to_f32<'de, D>(deserializer: D) -> Result<f32, D::Error>
 where
     D: serde::Deserializer<'de>,
 {
-    let s: String = serde::Deserialize::deserialize(deserializer)?;
-    s.parse::<f32>().map_err(serde::de::Error::custom)
+    let v = Value::deserialize(deserializer)?;
+    match v {
+        Value::String(s) => s.parse::<f32>().map_err(serde::de::Error::custom),
+        Value::Number(n) => n.as_f64().map(|f| f as f32).ok_or_else(|| {
+            serde::de::Error::custom("Invalid number")
+        }),
+        _ => Err(serde::de::Error::custom("Expected string or number")),
+    }
 }
 
-fn de_string_to_u64<'de, D>(deserializer: D) -> Result<u64, D::Error>
+pub fn de_string_to_u64<'de, D>(deserializer: D) -> Result<u64, D::Error>
 where
     D: serde::Deserializer<'de>,
 {
@@ -690,9 +691,18 @@ fn str_f32_parse(s: &str) -> f32 {
     })
 }
 
-/// ضریب گام قیمت (برای گروه‌بندی قیمت‌ها در نمودار)
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize, Hash)]
-pub struct TickMultiplier(pub u16);
+#[derive(Debug, Clone, Copy, PartialEq, Deserialize, Serialize)]
+pub struct TickMultiplier(pub f64);
+
+impl std::hash::Hash for TickMultiplier {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        // Simple float hashing by bits, sufficient for UI state where exact equality is rare for floats
+        // but these are discrete presets usually.
+        state.write_u64(self.0.to_bits());
+    }
+}
+
+impl Eq for TickMultiplier {}
 
 impl std::fmt::Display for TickMultiplier {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
@@ -701,16 +711,20 @@ impl std::fmt::Display for TickMultiplier {
 }
 
 impl TickMultiplier {
-    pub const ALL: [TickMultiplier; 9] = [
-        TickMultiplier(1),
-        TickMultiplier(2),
-        TickMultiplier(5),
-        TickMultiplier(10),
-        TickMultiplier(25),
-        TickMultiplier(50),
-        TickMultiplier(100),
-        TickMultiplier(200),
-        TickMultiplier(500),
+    pub const ALL: [TickMultiplier; 13] = [
+        TickMultiplier(0.1),
+        TickMultiplier(0.2),
+        TickMultiplier(0.5),
+        TickMultiplier(1.0),
+        TickMultiplier(2.0),
+        TickMultiplier(5.0),
+        TickMultiplier(10.0),
+        TickMultiplier(25.0),
+        TickMultiplier(50.0),
+        TickMultiplier(100.0),
+        TickMultiplier(200.0),
+        TickMultiplier(500.0),
+        TickMultiplier(1000.0),
     ];
 
     pub fn is_custom(&self) -> bool {
@@ -721,7 +735,7 @@ impl TickMultiplier {
         let decimals = (-scaled_value.log10()).ceil() as i32 + 2;
         let multiplier = 10f32.powi(decimals);
 
-        ((scaled_value * multiplier) / f32::from(self.0)).round() / multiplier
+        ((scaled_value * multiplier) / self.0 as f32).round() / multiplier
     }
 
     /// Returns the final tick size after applying the user selected multiplier
@@ -739,8 +753,15 @@ impl TickMultiplier {
         } else {
             multiply / 10f32.powi(-power)
         };
+        
+        // Adjust rounding precision if multiplier introduces more decimals (e.g. 0.1)
+        let added_precision = if multiply < 1.0 {
+            (-multiply.log10()).ceil() as u32
+        } else {
+            0
+        };
 
-        round_to_decimal_places(raw, decimal_places)
+        round_to_decimal_places(raw, decimal_places + added_precision)
     }
 }
 

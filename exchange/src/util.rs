@@ -4,10 +4,9 @@ pub type ContractSize = Power10<-4, 6>;
 pub type MinTicksize = Power10<-8, 2>;
 pub type MinQtySize = Power10<-6, 8>;
 
-/// ساختار کمکی برای نمایش مقادیر بر اساس توان ۱۰ (برای دقت ثابت)
 #[derive(Debug, Clone, Copy, PartialEq, Hash, Eq)]
 pub struct Power10<const MIN: i8, const MAX: i8> {
-    pub power: i8, // توان ۱۰ (مثلاً -۳ برای ۰.۰۰۱)
+    pub power: i8,
 }
 
 impl<const MIN: i8, const MAX: i8> Power10<MIN, MAX> {
@@ -63,10 +62,9 @@ impl<'de, const MIN: i8, const MAX: i8> serde::Deserialize<'de> for Power10<MIN,
     }
 }
 
-/// گام تغییر قیمت (Price Step)
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Hash, Deserialize, Serialize)]
 pub struct PriceStep {
-    /// اندازه گام بر اساس واحدهای اتمی (10^-PRICE_SCALE)
+    /// step size in atomic units (10^-PRICE_SCALE)
     pub units: i64,
 }
 
@@ -91,16 +89,16 @@ impl PriceStep {
     }
 }
 
-/// ساختار قیمت با دقت ثابت (Fixed Atomic Unit Scale)
-/// کوچکترین واحد قابل ذخیره 10^-PRICE_SCALE است.
+/// Fixed atomic unit scale: 10^-PRICE_SCALE is the smallest stored fraction.
+/// MinTicksize has range [-8, 2], e.g. PRICE_SCALE = 8 to represent 10^-8 atomic units.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Ord, PartialOrd, Deserialize, Serialize)]
 pub struct Price {
-    /// تعداد واحدهای اتمی (هر واحد اتمی = 10^-PRICE_SCALE)
+    /// number of atomic units (atomic unit = 10^-PRICE_SCALE)
     pub units: i64,
 }
 
 impl Price {
-    /// تعداد ارقام اعشار واحد اتمی (10^-8)
+    /// number of decimal places of the atomic unit (10^-8)
     pub const PRICE_SCALE: i32 = 8;
 
     #[inline]
@@ -157,13 +155,13 @@ impl Price {
         write!(out, ".{:0width$}", frac_part, width = decimals as usize)
     }
 
-    /// تبدیل قیمت به f32 (ممکن است دقت کمی از دست برود)
+    /// Lossy: convert price to f32, may lose precision if going beyond `PRICE_SCALE`
     pub fn to_f32_lossy(self) -> f32 {
         let scale = 10f32.powi(Self::PRICE_SCALE);
         (self.units as f32) / scale
     }
 
-    /// ایجاد قیمت از f32 (گرد کردن به نزدیکترین واحد اتمی)
+    /// Lossy: create Price from f32 (rounds to nearest atomic unit)
     pub fn from_f32_lossy(v: f32) -> Self {
         let scale = 10f32.powi(Self::PRICE_SCALE);
         let u = (v * scale).round() as i64;
@@ -239,7 +237,7 @@ impl Price {
             .expect("min_tick_units overflowed")
     }
 
-    /// گرد کردن قیمت به نزدیکترین مضرب از حداقل گام تغییر قیمت (min_ticksize)
+    /// Round this Price to the nearest multiple of the provided min_ticksize
     pub fn round_to_min_tick(self, min_tick: MinTicksize) -> Self {
         let unit = Self::min_tick_units(min_tick);
         if unit <= 1 {

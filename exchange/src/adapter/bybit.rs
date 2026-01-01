@@ -35,7 +35,6 @@ const LIMIT: usize = 600;
 const REFILL_RATE: Duration = Duration::from_secs(5);
 const LIMITER_BUFFER_PCT: f32 = 0.05;
 
-/// محدودکننده نرخ اختصاصی برای بای‌بیت
 pub struct BybitLimiter {
     bucket: limiter::FixedWindowBucket,
 }
@@ -71,15 +70,14 @@ fn exchange_from_market_type(market: MarketKind) -> Exchange {
     }
 }
 
-/// ساختار داده‌های عمق بازار دریافتی از بای‌بیت
 #[derive(Deserialize)]
 struct SonicDepth {
     #[serde(rename = "u")]
-    pub update_id: u64, // شناسه بروزرسانی
+    pub update_id: u64,
     #[serde(rename = "b")]
-    pub bids: Vec<DeOrder>, // لیست خرید
+    pub bids: Vec<DeOrder>,
     #[serde(rename = "a")]
-    pub asks: Vec<DeOrder>, // لیست فروش
+    pub asks: Vec<DeOrder>,
 }
 
 #[derive(Deserialize, Debug)]
@@ -112,11 +110,10 @@ pub struct SonicKline {
     pub interval: String,
 }
 
-/// انواع داده‌های دریافتی از جریان وب‌سوکت بای‌بیت
 enum StreamData {
-    Trade(Vec<SonicTrade>),        // داده‌های معاملات
-    Depth(SonicDepth, String, u64), // داده‌های عمق بازار
-    Kline(Ticker, Vec<SonicKline>), // داده‌های کندل
+    Trade(Vec<SonicTrade>),
+    Depth(SonicDepth, String, u64),
+    Kline(Ticker, Vec<SonicKline>),
 }
 
 #[derive(Debug)]
@@ -304,7 +301,6 @@ async fn try_connect(
     }
 }
 
-/// برقراری اتصال به جریان داده‌های بازار (عمق و معاملات) بای‌بیت
 pub fn connect_market_stream(
     ticker_info: TickerInfo,
     push_freq: PushFrequency,
@@ -466,7 +462,6 @@ pub fn connect_market_stream(
     })
 }
 
-/// برقراری اتصال به جریان داده‌های کندل (Kline) بای‌بیت
 pub fn connect_kline_stream(
     streams: Vec<(TickerInfo, Timeframe)>,
     market_type: MarketKind,
@@ -616,7 +611,6 @@ struct DeOpenInterest {
 /// # Panics
 ///
 /// Will panic if the `period` is not one of the supported timeframes for open interest
-/// دریافت تاریخچه بهره باز (Open Interest) از بای‌بیت
 pub async fn fetch_historical_oi(
     ticker: Ticker,
     range: Option<(u64, u64)>,
@@ -721,7 +715,6 @@ fn parse_kline_field<T: std::str::FromStr>(field: Option<&str>) -> Result<T, Ada
         })
 }
 
-/// دریافت داده‌های کندل (Kline) از طریق API بای‌بیت
 pub async fn fetch_klines(
     ticker_info: TickerInfo,
     timeframe: Timeframe,
@@ -800,7 +793,6 @@ pub async fn fetch_klines(
     klines
 }
 
-/// دریافت اطلاعات نمادها (گام قیمت و ...) از بای‌بیت
 pub async fn fetch_ticksize(
     market_type: MarketKind,
 ) -> Result<HashMap<Ticker, Option<TickerInfo>>, AdapterError> {
@@ -884,7 +876,6 @@ pub async fn fetch_ticksize(
     Ok(ticker_info_map)
 }
 
-/// دریافت قیمت‌های فعلی و آمار ۲۴ ساعته نمادها از بای‌بیت
 pub async fn fetch_ticker_prices(
     market_type: MarketKind,
 ) -> Result<HashMap<Ticker, TickerStats>, AdapterError> {

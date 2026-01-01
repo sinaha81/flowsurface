@@ -37,7 +37,6 @@ const LIMITER_BUFFER_PCT: f32 = 0.05;
 static OKEX_LIMITER: LazyLock<Mutex<OkexLimiter>> =
     LazyLock::new(|| Mutex::new(OkexLimiter::new(LIMIT, REFILL_RATE)));
 
-/// محدودکننده نرخ اختصاصی برای اوکی‌اکس (OKEx)
 pub struct OkexLimiter {
     bucket: limiter::FixedWindowBucket,
 }
@@ -77,11 +76,10 @@ struct SonicTrade {
     pub is_sell: String,
 }
 
-/// ساختار داده‌های عمق بازار دریافتی از اوکی‌اکس
 struct SonicDepth {
-    pub update_id: u64,     // شناسه بروزرسانی
-    pub bids: Vec<DeOrder>, // لیست خرید
-    pub asks: Vec<DeOrder>, // لیست فروش
+    pub update_id: u64,
+    pub bids: Vec<DeOrder>,
+    pub asks: Vec<DeOrder>,
 }
 
 enum StreamData {
@@ -201,7 +199,6 @@ async fn try_connect(
     }
 }
 
-/// برقراری اتصال به جریان داده‌های بازار (عمق و معاملات) اوکی‌اکس
 pub fn connect_market_stream(
     ticker_info: TickerInfo,
     push_freq: PushFrequency,
@@ -350,7 +347,6 @@ pub fn connect_market_stream(
     })
 }
 
-/// برقراری اتصال به جریان داده‌های کندل (Kline) اوکی‌اکس
 pub fn connect_kline_stream(
     streams: Vec<(TickerInfo, Timeframe)>,
     market_type: MarketKind,
@@ -564,7 +560,6 @@ fn timeframe_to_okx_bar(tf: Timeframe) -> Option<&'static str> {
     })
 }
 
-/// دریافت اطلاعات نمادها (گام قیمت و ...) از اوکی‌اکس
 pub async fn fetch_ticksize(
     market_type: MarketKind,
 ) -> Result<std::collections::HashMap<Ticker, Option<TickerInfo>>, AdapterError> {
@@ -647,7 +642,6 @@ pub async fn fetch_ticksize(
     Ok(map)
 }
 
-/// دریافت قیمت‌های فعلی و آمار ۲۴ ساعته نمادها از اوکی‌اکس
 pub async fn fetch_ticker_prices(
     market_type: MarketKind,
 ) -> Result<std::collections::HashMap<Ticker, TickerStats>, AdapterError> {
@@ -724,7 +718,6 @@ pub async fn fetch_ticker_prices(
     Ok(map)
 }
 
-/// دریافت داده‌های کندل (Kline) از طریق API اوکی‌اکس
 pub async fn fetch_klines(
     ticker_info: TickerInfo,
     timeframe: Timeframe,
@@ -820,7 +813,6 @@ pub async fn fetch_klines(
 
 const TRADING_STATS_DOMAIN: &str = "https://www.okx.com/api/v5/rubik/stat";
 
-/// دریافت تاریخچه بهره باز (Open Interest) از اوکی‌اکس
 pub async fn fetch_historical_oi(
     ticker: Ticker,
     range: Option<(u64, u64)>,

@@ -14,12 +14,11 @@ pub mod bybit;
 pub mod hyperliquid;
 pub mod okex;
 
-/// وضعیت جریان‌های داده (Streams) که یا در انتظار حل شدن هستند یا آماده استفاده
 #[derive(Debug, Clone, PartialEq)]
 pub enum ResolvedStream {
-    /// جریان‌هایی که ذخیره شده‌اند اما نیاز به شناسایی (Resolve) برای استفاده دارند
+    /// Streams that are persisted but needs to be resolved for use
     Waiting(Vec<PersistStreamKind>),
-    /// جریان‌هایی که فعال و آماده استفاده هستند، اما قابل ذخیره شدن نیستند
+    /// Streams that are active and ready to use, but can't persist
     Ready(Vec<StreamKind>),
 }
 
@@ -117,17 +116,16 @@ impl IntoIterator for &ResolvedStream {
     }
 }
 
-/// خطاهای مربوط به آداپتورهای صرافی
 #[derive(thiserror::Error, Debug)]
 pub enum AdapterError {
     #[error("{0}")]
-    FetchError(#[from] reqwest::Error), // خطای شبکه یا دریافت داده
+    FetchError(#[from] reqwest::Error),
     #[error("Parsing: {0}")]
-    ParseError(String),                // خطای تجزیه داده‌ها
+    ParseError(String),
     #[error("Stream: {0}")]
-    WebsocketError(String),            // خطای وب‌سوکت
+    WebsocketError(String),
     #[error("Invalid request: {0}")]
-    InvalidRequest(String),            // درخواست نامعتبر
+    InvalidRequest(String),
 }
 
 impl AdapterError {
@@ -153,12 +151,11 @@ impl AdapterError {
     }
 }
 
-/// انواع بازارهای معاملاتی
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Deserialize, Serialize)]
 pub enum MarketKind {
-    Spot,          // بازار اسپات
-    LinearPerps,   // فیوچرز خطی (Linear Perpetual)
-    InversePerps,  // فیوچرز معکوس (Inverse Perpetual)
+    Spot,
+    LinearPerps,
+    InversePerps,
 }
 
 impl MarketKind {
@@ -196,15 +193,12 @@ impl std::fmt::Display for MarketKind {
     }
 }
 
-/// انواع جریان‌های داده (Streams)
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Hash, Deserialize, Serialize)]
 pub enum StreamKind {
-    /// جریان داده‌های کندل (Kline)
     Kline {
         ticker_info: TickerInfo,
         timeframe: Timeframe,
     },
-    /// جریان داده‌های عمق بازار و معاملات (Depth and Trades)
     DepthAndTrades {
         ticker_info: TickerInfo,
         #[serde(default = "default_depth_aggr")]
@@ -333,11 +327,10 @@ impl UniqueStreams {
     }
 }
 
-/// انواع جریان‌های داده که برای ذخیره‌سازی در حافظه دائمی استفاده می‌شوند
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
 pub enum PersistStreamKind {
-    Kline(PersistKline),           // کندل‌های ذخیره شده
-    DepthAndTrades(PersistDepth), // عمق بازار ذخیره شده
+    Kline(PersistKline),
+    DepthAndTrades(PersistDepth),
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
@@ -353,6 +346,15 @@ pub struct PersistDepth {
 pub struct PersistKline {
     pub ticker: Ticker,
     pub timeframe: Timeframe,
+}
+
+impl PersistStreamKind {
+    pub fn ticker(&self) -> &Ticker {
+        match self {
+            PersistStreamKind::Kline(k) => &k.ticker,
+            PersistStreamKind::DepthAndTrades(d) => &d.ticker,
+        }
+    }
 }
 
 impl From<StreamKind> for PersistStreamKind {
@@ -403,12 +405,11 @@ impl PersistStreamKind {
     }
 }
 
-/// نحوه تجمیع گام‌های قیمت در جریان داده
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Hash, Deserialize, Serialize)]
 pub enum StreamTicksize {
-    ServerSide(TickMultiplier), // تجمیع در سمت سرور
+    ServerSide(TickMultiplier),
     #[default]
-    Client,                     // تجمیع در سمت کلاینت
+    Client,
 }
 
 fn default_depth_aggr() -> StreamTicksize {
@@ -453,7 +454,6 @@ impl ExchangeInclusive {
     }
 }
 
-/// لیست صرافی‌های پشتیبانی شده
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Deserialize, Serialize, Enum)]
 pub enum Exchange {
     BinanceLinear,
@@ -608,13 +608,12 @@ impl Exchange {
     }
 }
 
-/// رویدادهای دریافتی از صرافی
 #[derive(Debug, Clone)]
 pub enum Event {
-    Connected(Exchange),                // اتصال برقرار شد
-    Disconnected(Exchange, String),     // اتصال قطع شد
-    DepthReceived(StreamKind, u64, Arc<Depth>, Box<[Trade]>), // داده‌های عمق بازار دریافت شد
-    KlineReceived(StreamKind, Kline),   // داده‌های کندل دریافت شد
+    Connected(Exchange),
+    Disconnected(Exchange, String),
+    DepthReceived(StreamKind, u64, Arc<Depth>, Box<[Trade]>),
+    KlineReceived(StreamKind, Kline),
 }
 
 #[derive(Debug, Clone, Hash)]

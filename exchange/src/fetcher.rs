@@ -16,45 +16,41 @@ pub fn is_trade_fetch_enabled() -> bool {
     TRADE_FETCH_ENABLED.load(Ordering::Relaxed)
 }
 
-/// انواع داده‌های دریافت شده از صرافی
 #[derive(Debug, Clone)]
 pub enum FetchedData {
     Trades {
-        batch: Vec<Trade>, // لیست معاملات
-        until_time: u64,   // تا زمان مشخص شده
+        batch: Vec<Trade>,
+        until_time: u64,
     },
     Klines {
-        data: Vec<Kline>,          // لیست کندل‌ها
-        req_id: Option<uuid::Uuid>, // شناسه درخواست
+        data: Vec<Kline>,
+        req_id: Option<uuid::Uuid>,
     },
     OI {
-        data: Vec<OpenInterest>,   // لیست بهره باز (Open Interest)
-        req_id: Option<uuid::Uuid>, // شناسه درخواست
+        data: Vec<OpenInterest>,
+        req_id: Option<uuid::Uuid>,
     },
 }
 
-/// خطاهای مربوط به درخواست‌های دریافت داده
 #[derive(thiserror::Error, Debug, Clone)]
 pub enum ReqError {
     #[error("Request is already completed")]
-    Completed, // درخواست قبلاً با موفقیت انجام شده است
+    Completed,
     #[error("Request is already failed: {0}")]
-    Failed(String), // درخواست قبلاً با خطا مواجه شده است
+    Failed(String),
     #[error("Request overlaps with an existing request")]
-    Overlaps, // درخواست با یک درخواست موجود همپوشانی دارد
+    Overlaps,
 }
 
-/// وضعیت یک درخواست
 #[derive(PartialEq, Debug)]
 enum RequestStatus {
-    Pending,           // در حال انتظار
-    Completed(u64),    // تکمیل شده (به همراه برچسب زمانی)
-    Failed(String),    // با خطا مواجه شده
+    Pending,
+    Completed(u64),
+    Failed(String),
 }
 
-/// مدیریت‌کننده درخواست‌های دریافت داده
 pub struct RequestHandler {
-    requests: HashMap<Uuid, FetchRequest>, // نقشه‌ای از شناسه‌ها به درخواست‌ها
+    requests: HashMap<Uuid, FetchRequest>,
 }
 
 impl RequestHandler {
@@ -118,12 +114,11 @@ impl Default for RequestHandler {
     }
 }
 
-/// محدوده و نوع داده برای دریافت
 #[derive(PartialEq, Debug, Clone, Copy)]
 pub enum FetchRange {
-    Kline(u64, u64),        // دریافت کندل‌ها در بازه زمانی (شروع، پایان)
-    OpenInterest(u64, u64), // دریافت بهره باز در بازه زمانی
-    Trades(u64, u64),       // دریافت معاملات در بازه زمانی
+    Kline(u64, u64),
+    OpenInterest(u64, u64),
+    Trades(u64, u64),
 }
 
 #[derive(PartialEq, Debug)]
@@ -151,11 +146,10 @@ impl FetchRequest {
     }
 }
 
-/// مشخصات یک درخواست دریافت داده شامل شناسه و نوع
 pub struct FetchSpec {
-    pub req_id: uuid::Uuid,       // شناسه درخواست
-    pub fetch: FetchRange,        // محدوده دریافت
-    pub stream: Option<StreamKind>, // جریان داده مربوطه (اختیاری)
+    pub req_id: uuid::Uuid,
+    pub fetch: FetchRange,
+    pub stream: Option<StreamKind>,
 }
 
 impl From<(uuid::Uuid, FetchRange, Option<StreamKind>)> for FetchSpec {
@@ -190,10 +184,9 @@ impl Clone for FetchSpec {
     }
 }
 
-/// انواع وضعیت‌های اطلاع‌رسانی در حال دریافت داده
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum InfoKind {
-    FetchingKlines,         // در حال دریافت کندل‌ها
-    FetchingTrades(usize),  // در حال دریافت معاملات (به همراه تعداد)
-    FetchingOI,             // در حال دریافت بهره باز
+    FetchingKlines,
+    FetchingTrades(usize),
+    FetchingOI,
 }

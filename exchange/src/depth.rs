@@ -1,77 +1,51 @@
 use crate::{MinTicksize, Price};
 
-use serde::Deserializer;
-use serde::de::Error as SerdeError;
-use serde_json::Value;
 
 use std::{collections::BTreeMap, sync::Arc};
 
-/// ساختار کمکی برای دی‌سریال‌سازی یک سطح قیمتی در دفتر سفارش
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, serde::Deserialize)]
+#[serde(from = "DeOrderTuple")]
 pub struct DeOrder {
-    pub price: f32, // قیمت
-    pub qty: f32,   // مقدار
+    pub price: f32,
+    pub qty: f32,
 }
 
-impl<'de> serde::Deserialize<'de> for DeOrder {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        // can be either an array like ["price","qty", ...] or an object with keys "0" and "1"
-        let value = Value::deserialize(deserializer).map_err(SerdeError::custom)?;
+#[derive(serde::Deserialize)]
+struct DeOrderTuple(
+    #[serde(deserialize_with = "crate::de_string_to_f32")] f32,
+    #[serde(deserialize_with = "crate::de_string_to_f32")] f32,
+);
 
-        let parse_f = |val: &Value| -> Option<f32> {
-            match val {
-                Value::String(s) => s.parse::<f32>().ok(),
-                Value::Number(n) => n.as_f64().map(|x| x as f32),
-                _ => None,
-            }
-        };
-
-        let price = match &value {
-            Value::Array(arr) => arr.first().and_then(parse_f),
-            Value::Object(map) => map.get("0").and_then(parse_f),
-            _ => None,
+impl From<DeOrderTuple> for DeOrder {
+    fn from(tuple: DeOrderTuple) -> Self {
+        Self {
+            price: tuple.0,
+            qty: tuple.1,
         }
-        .ok_or_else(|| SerdeError::custom("Order price not found or invalid"))?;
-
-        let qty = match &value {
-            Value::Array(arr) => arr.get(1).and_then(parse_f),
-            Value::Object(map) => map.get("1").and_then(parse_f),
-            _ => None,
-        }
-        .ok_or_else(|| SerdeError::custom("Order qty not found or invalid"))?;
-
-        Ok(DeOrder { price, qty })
     }
 }
 
-/// ساختار داخلی برای نمایش یک سفارش با قیمت دقیق
 struct Order {
     price: Price,
     qty: f32,
 }
 
-/// داده‌های دریافتی مربوط به عمق بازار
 pub struct DepthPayload {
-    pub last_update_id: u64, // شناسه آخرین بروزرسانی
-    pub time: u64,           // زمان بروزرسانی
-    pub bids: Vec<DeOrder>,  // لیست قیمت‌های خرید
-    pub asks: Vec<DeOrder>,  // لیست قیمت‌های فروش
+    pub last_update_id: u64,
+    pub time: u64,
+    pub bids: Vec<DeOrder>,
+    pub asks: Vec<DeOrder>,
 }
 
-/// انواع بروزرسانی‌های عمق بازار
 pub enum DepthUpdate {
-    Snapshot(DepthPayload), // تصویر کامل از وضعیت فعلی (Snapshot)
-    Diff(DepthPayload),     // تغییرات نسبت به وضعیت قبلی (Delta/Diff)
+    Snapshot(DepthPayload),
+    Diff(DepthPayload),
 }
 
-/// ساختار نگهدارنده وضعیت فعلی دفتر سفارش
 #[derive(Clone, Default)]
 pub struct Depth {
-    pub bids: BTreeMap<Price, f32>, // دفتر سفارشات خرید (مرتب شده بر اساس قیمت)
-    pub asks: BTreeMap<Price, f32>, // دفتر سفارشات فروش (مرتب شده بر اساس قیمت)
+    pub bids: BTreeMap<Price, f32>,
+    pub asks: BTreeMap<Price, f32>,
 }
 
 impl std::fmt::Debug for Depth {
@@ -139,12 +113,11 @@ impl Depth {
     }
 }
 
-/// حافظه موقت محلی برای نگهداری و بروزرسانی عمق بازار یک نماد
 #[derive(Default)]
 pub struct LocalDepthCache {
-    pub last_update_id: u64, // آخرین شناسه بروزرسانی اعمال شده
-    pub time: u64,           // زمان آخرین بروزرسانی
-    pub depth: Arc<Depth>,   // وضعیت فعلی عمق بازار (به صورت اشتراکی)
+    pub last_update_id: u64,
+    pub time: u64,
+    pub depth: Arc<Depth>,
 }
 
 impl LocalDepthCache {
