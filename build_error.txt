@@ -1,0 +1,15 @@
+    Checking flowsurface v0.8.6 (F:\desktop\flowsurface-main)
+error[E0502]: cannot borrow `*self` as mutable because it is also borrowed as immutable
+   --> src\indicators\volume_profile.rs:379:21
+    |
+362 |         for setting in &self.settings {
+    |                        --------------
+    |                        |
+    |                        immutable borrow occurs here
+    |                        immutable borrow later used here
+...
+379 |                     self.calculate_levels();
+    |                     ^^^^^^^^^^^^^^^^^^^^^^^ mutable borrow occurs here
+
+For more information about this error, try `rustc --explain E0502`.
+error: could not compile `flowsurface` (bin "flowsurface") due to 1 previous error
