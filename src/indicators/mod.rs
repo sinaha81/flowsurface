@@ -3,6 +3,7 @@
 
 pub mod vwap;
 pub mod cvd;
+pub mod volume_profile;
 
 
 use exchange::{Trade, Kline};
@@ -311,6 +312,7 @@ pub static REGISTRY: std::sync::LazyLock<IndicatorRegistry> = std::sync::LazyLoc
     // Register built-in indicators
     registry.register("VWAP", |config| vwap::Vwap::new(config));
     registry.register("CVD", |config| cvd::Cvd::new(config));
+    registry.register("Volume Profile", |config| volume_profile::VolumeProfile::new(config));
 
 
     registry

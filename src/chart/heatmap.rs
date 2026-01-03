@@ -139,7 +139,7 @@ impl Chart for HeatmapChart {
                  .on_press(Message::EditIndicator(idx))
                  .padding(2)
                  .style(|t, s| style::button::transparent(t, s, false));
-
+ 
              let remove_btn = button(icon_text(Icon::Close, 14))
                  .on_press(Message::RemoveModularIndicator(idx))
                  .padding(2)
@@ -156,6 +156,17 @@ impl Chart for HeatmapChart {
             .style(style::ticker_card)
             .into()
         )
+    }
+
+    fn clear_data(&mut self) {
+        self.trades.datapoints.clear();
+        self.heatmap.clear();
+        self.pause_buffer.clear();
+        self.chart.last_price = None;
+        self.chart.cache.clear_all();
+        for indi in &mut self.modular_indicators {
+            indi.reset();
+        }
     }
 }
 

@@ -26,7 +26,8 @@ use widget::{
 use iced::{
     Alignment, Element, Subscription, Task, keyboard, padding,
     widget::{
-        button, column, container, pane_grid, pick_list, row, rule, scrollable, text,
+        button, column, container, pane_grid, pick_list, radio, row, rule, scrollable, text,
+        text_input,
         tooltip::Position as TooltipPosition,
     },
 };
@@ -66,6 +67,27 @@ struct Flowsurface {
     timezone: data::UserTimezone,
     theme: data::Theme,
     notifications: Vec<Toast>,
+    proxy_cfg: exchange::ProxyConfig,
+    proxy_host_input: String,
+    proxy_port_input: String,
+    proxy_protocol_input: exchange::ProxyProtocol,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ProxyMode {
+    System,
+    None,
+    Custom,
+}
+
+impl From<&exchange::ProxyConfig> for ProxyMode {
+    fn from(cfg: &exchange::ProxyConfig) -> Self {
+        match cfg {
+            exchange::ProxyConfig::System => ProxyMode::System,
+            exchange::ProxyConfig::None => ProxyMode::None,
+            exchange::ProxyConfig::Custom(_) => ProxyMode::Custom,
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -93,7 +115,11 @@ enum Message {
     ThemeEditor(modal::theme_editor::Message),
     Layouts(modal::layout_manager::Message),
     AudioStream(modal::audio::Message),
-    OpenIndicators,
+    ProxyConfigChanged(exchange::ProxyConfig),
+    ProxyModeChanged(ProxyMode),
+    ProxyHostInputChanged(String),
+    ProxyPortInputChanged(String),
+    ProxyProtocolInputChanged(exchange::ProxyProtocol),
 }
 
 impl Flowsurface {
@@ -112,6 +138,22 @@ impl Flowsurface {
         };
 
         let (sidebar, launch_sidebar) = dashboard::Sidebar::new(&saved_state);
+        
+        // Initialize proxy
+        if let Err(e) = exchange::set_global_proxy(saved_state.proxy_cfg.clone()) {
+            log::error!("Failed to set proxy: {}", e);
+        }
+
+        let (proxy_host_input, proxy_port_input, proxy_protocol_input) = match &saved_state.proxy_cfg {
+            exchange::ProxyConfig::Custom(proxies) => {
+                if let Some(c) = proxies.first() {
+                    (c.host.clone(), c.port.to_string(), c.protocol.clone())
+                } else {
+                    ("127.0.0.1".to_string(), "1080".to_string(), exchange::ProxyProtocol::Socks5)
+                }
+            }
+            _ => ("127.0.0.1".to_string(), "1080".to_string(), exchange::ProxyProtocol::Socks5),
+        };
 
         let mut state = Self {
             main_window: window::Window::new(main_window_id),
@@ -125,6 +167,10 @@ impl Flowsurface {
             volume_size_unit: saved_state.volume_size_unit,
             theme: saved_state.theme,
             notifications: vec![],
+            proxy_cfg: saved_state.proxy_cfg,
+            proxy_host_input,
+            proxy_port_input,
+            proxy_protocol_input,
         };
 
         let active_layout_id = state.layout_manager.active_layout_id().unwrap_or(
@@ -516,10 +562,47 @@ impl Flowsurface {
 
                 return window::collect_window_specs(active_windows, Message::RestartRequested);
             }
-            Message::OpenIndicators => {
-                let window_id = self.main_window.id;
-                self.active_dashboard_mut()
-                    .open_indicators_modal(window_id);
+            Message::ProxyConfigChanged(cfg) => {
+                self.proxy_cfg = cfg.clone();
+                if let exchange::ProxyConfig::Custom(proxies) = &cfg {
+                    if let Some(custom) = proxies.first() {
+                         self.proxy_host_input = custom.host.clone();
+                         self.proxy_port_input = custom.port.to_string();
+                         self.proxy_protocol_input = custom.protocol.clone();
+                    }
+                }
+                if let Err(e) = exchange::set_global_proxy(cfg) {
+                     self.notifications.push(Toast::error(format!("Failed to set proxy: {}", e)));
+                }
+            }
+            Message::ProxyModeChanged(mode) => {
+                let new_cfg = match mode {
+                    ProxyMode::System => exchange::ProxyConfig::System,
+                    ProxyMode::None => exchange::ProxyConfig::None,
+                    ProxyMode::Custom => {
+                        let port = self.proxy_port_input.parse().unwrap_or(1080);
+                        exchange::ProxyConfig::Custom(vec![exchange::CustomProxy {
+                            protocol: self.proxy_protocol_input.clone(),
+                            host: self.proxy_host_input.clone(),
+                            port,
+                        }])
+                    },
+                };
+                self.proxy_cfg = new_cfg.clone();
+                if let Err(e) = exchange::set_global_proxy(new_cfg) {
+                     self.notifications.push(Toast::error(format!("Failed to set proxy: {}", e)));
+                }
+            }
+            Message::ProxyHostInputChanged(val) => {
+                self.proxy_host_input = val;
+            }
+            Message::ProxyPortInputChanged(val) => {
+                if val.chars().all(|c| c.is_ascii_digit()) {
+                     self.proxy_port_input = val;
+                }
+            }
+            Message::ProxyProtocolInputChanged(proto) => {
+                self.proxy_protocol_input = proto;
             }
         }
         Task::none()
@@ -566,16 +649,9 @@ impl Flowsurface {
                 }
             };
 
-            let indicators_btn = button(text("Indicators").size(14))
-                .on_press(Message::OpenIndicators)
-                .padding([4, 8])
-                // .style(style::button::secondary)
-                ;
-
             let top_bar = row![
                 header_title,
                 iced::widget::Space::new().width(iced::Length::Fill),
-                indicators_btn,
             ]
             .padding(padding::left(8).right(8).top(4))
             .align_y(Alignment::Center);
@@ -864,6 +940,86 @@ impl Flowsurface {
                             column![trade_fetch_checkbox, toggle_theme_editor,].spacing(8),
                         ]
                         .spacing(12),
+                            column![
+                                text("Proxy Settings").size(14),
+                                column![
+                                    radio(
+                                        "System Proxy",
+                                        ProxyMode::System,
+                                        Some(ProxyMode::from(&self.proxy_cfg)),
+                                        Message::ProxyModeChanged
+                                    ),
+                                    radio(
+                                        "No Proxy", 
+                                        ProxyMode::None,
+                                        Some(ProxyMode::from(&self.proxy_cfg)),
+                                        Message::ProxyModeChanged
+                                    ),
+                                    row![
+                                        radio(
+                                            "Custom",
+                                            ProxyMode::Custom,
+                                            Some(ProxyMode::from(&self.proxy_cfg)),
+                                            Message::ProxyModeChanged
+                                        ),
+                                    ].spacing(10),
+                                    if let exchange::ProxyConfig::Custom(_) = self.proxy_cfg {
+                                            let protocols = exchange::ProxyProtocol::all();
+                                            
+                                            let scheme_label = match self.proxy_protocol_input {
+                                                exchange::ProxyProtocol::Auto => "(default)",
+                                                exchange::ProxyProtocol::Http => "http://",
+                                                exchange::ProxyProtocol::Https => "https://",
+                                                exchange::ProxyProtocol::Socks4 => "socks4://",
+                                                exchange::ProxyProtocol::Socks5 => "socks5://",
+                                            };
+
+                                            let header = row![
+                                                text("Scheme").size(12).width(70),
+                                                text("Protocol").size(12).width(90),
+                                                text("Server Address").size(12).width(iced::Length::Fill),
+                                                text("Port").size(12).width(60),
+                                            ].spacing(10);
+
+                                            let proto_pick = pick_list(
+                                                protocols,
+                                                Some(self.proxy_protocol_input.clone()),
+                                                Message::ProxyProtocolInputChanged
+                                            ).width(90);
+
+                                            let host_input = text_input("e.g. 192.168.1.1", &self.proxy_host_input)
+                                                .on_input(Message::ProxyHostInputChanged)
+                                                .padding(5)
+                                                .width(iced::Length::Fill);
+
+                                            let port_input = text_input("Port", &self.proxy_port_input)
+                                                .on_input(Message::ProxyPortInputChanged)
+                                                .padding(5)
+                                                .width(60);
+                                            
+                                            let apply_btn = button("Apply Settings")
+                                                .on_press(Message::ProxyConfigChanged(exchange::ProxyConfig::Custom(vec![exchange::CustomProxy {
+                                                    protocol: self.proxy_protocol_input.clone(),
+                                                    host: self.proxy_host_input.clone(),
+                                                    port: self.proxy_port_input.parse().unwrap_or(1080),
+                                                }])))
+                                                .padding(8);
+                                                
+                                            column![
+                                                header,
+                                                row![
+                                                    text(scheme_label).size(12).width(70),
+                                                    proto_pick, 
+                                                    host_input, 
+                                                    port_input
+                                                ].spacing(10).align_y(Alignment::Center),
+                                                apply_btn
+                                            ].spacing(10).padding(10)
+                                    } else {
+                                        column![]
+                                    }
+                                ].spacing(8)
+                            ].spacing(12),
                         ; spacing = 16, align_x = Alignment::Start
                     ];
 
@@ -876,7 +1032,7 @@ impl Flowsurface {
 
                     container(content)
                         .align_x(Alignment::Start)
-                        .max_width(240)
+                        .max_width(450)
                         .padding(24)
                         .style(style::dashboard_modal)
                 };
@@ -1107,6 +1263,7 @@ impl Flowsurface {
             self.ui_scale_factor,
             audio_cfg,
             self.volume_size_unit,
+            self.proxy_cfg.clone(),
         );
 
         match serde_json::to_string(&state) {

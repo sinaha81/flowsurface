@@ -205,6 +205,9 @@ impl State {
                     (content, streams)
                 }
                 ContentKind::FootprintChart => {
+                    // Auto-enable trade fetching for Footprint charts
+                    exchange::fetcher::toggle_trade_fetch(true);
+
                     let content = Content::new_kline(
                         kind,
                         &self.content,
@@ -1482,12 +1485,23 @@ impl State {
                                     if c.studies() != Some(new_studies.clone()) {
                                          c.update_studies(new_studies.clone());
                                          // We also need to update the content's studies list to stay in sync
-                                         *studies = new_studies;
                                     }
                                 }
                             }
                         }
-
+                        modal::pane::settings::Message::ReloadData => {
+                            match &mut self.content {
+                                Content::Kline { chart: Some(c), .. } => {
+                                    c.clear_data();
+                                    return Some(Effect::RefreshStreams);
+                                }
+                                Content::Heatmap { chart: Some(c), .. } => {
+                                    c.clear_data();
+                                    return Some(Effect::RefreshStreams);
+                                }
+                                _ => {}
+                            }
+                        }
                     }
                 }
             }

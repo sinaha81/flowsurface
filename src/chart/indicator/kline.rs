@@ -7,6 +7,7 @@ use exchange::fetcher::FetchRange;
 use exchange::{Kline, Timeframe, Trade};
 
 pub mod open_interest;
+pub mod summary_table;
 pub mod volume;
 
 pub trait KlineIndicatorImpl {
@@ -63,5 +64,6 @@ pub fn make_empty(which: KlineIndicator) -> Box<dyn KlineIndicatorImpl> {
         KlineIndicator::OpenInterest => {
             Box::new(super::kline::open_interest::OpenInterestIndicator::new())
         }
+        KlineIndicator::SummaryTable => Box::new(super::kline::summary_table::SummaryTableIndicator::new()),
     }
 }

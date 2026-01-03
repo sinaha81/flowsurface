@@ -41,6 +41,7 @@ pub enum Message {
     TradeSizeInputChanged(String),
     OrderSizeInputChanged(String),
     ColorScaleInputChanged(String),
+    ReloadData,
 }
 
 pub fn cfg_view_container<'a, T>(max_width: u32, content: T) -> Element<'a, PaneMessage>
@@ -574,6 +575,9 @@ pub fn kline_cfg_view<'a>(
                 column![text("Cluster scaling").size(14), scaling].spacing(8),
                 column![text("Studies").size(14), study_cfg].spacing(8),
                 row![
+                    button("Reload Data")
+                        .on_press(PaneMessage::PaneEvent(pane, Event::SettingsInteraction(Message::ReloadData)))
+                        .style(|t, s| style::button::cancel(t, s, false)),
                     space::horizontal(),
                     sync_all_button(pane, VisualConfig::Kline(cfg))
                 ],
@@ -742,6 +746,7 @@ pub mod study {
                     threshold,
                     color_scale,
                     ignore_zeros,
+                    stack_count,
                 } => {
                     let qty_threshold = {
                         let info_text = text(format!("Ask:Bid threshold: {threshold}%"));
@@ -752,6 +757,7 @@ pub mod study {
                                     threshold: new_value as usize,
                                     color_scale,
                                     ignore_zeros,
+                                    stack_count,
                                 })
                             })
                             .step(25.0);
@@ -774,6 +780,7 @@ pub mod study {
                                         None
                                     },
                                     ignore_zeros,
+                                    stack_count,
                                 })
                             });
 
@@ -785,6 +792,7 @@ pub mod study {
                                         threshold,
                                         color_scale: Some(new_value as usize),
                                         ignore_zeros,
+                                        stack_count,
                                     })
                                 })
                                 .step(50.0)
@@ -819,6 +827,7 @@ pub mod study {
                                     threshold,
                                     color_scale,
                                     ignore_zeros: is_checked,
+                                    stack_count,
                                 })
                             },
                         );
@@ -826,8 +835,106 @@ pub mod study {
                         column![cbox].padding(8).spacing(4)
                     };
 
-                    split_column![qty_threshold, color_scaling, ignore_zeros_checkbox]
+                    let stack_count_slider = {
+                        let info_text = text(format!("Stack count: {stack_count}"));
+                        let slider_ui = slider(2.0..=10.0, stack_count as f32, move |new_value| {
+                            on_change(FootprintStudy::Imbalance {
+                                threshold,
+                                color_scale,
+                                ignore_zeros,
+                                stack_count: new_value as usize,
+                            })
+                        })
+                        .step(1.0);
+                        column![info_text, slider_ui].padding(8).spacing(4)
+                    };
+
+                    split_column![qty_threshold, color_scaling, ignore_zeros_checkbox, stack_count_slider]
                         .padding(4)
+                        .into()
+                }
+                FootprintStudy::SummaryTable {
+                    show_delta,
+                    show_max_min,
+                    show_volume,
+                } => {
+                    let delta_checkbox = checkbox(show_delta).label("Show Delta").on_toggle(
+                        move |v| {
+                            on_change(FootprintStudy::SummaryTable {
+                                show_delta: v,
+                                show_max_min,
+                                show_volume,
+                            })
+                        },
+                    );
+
+                    let max_min_checkbox = checkbox(show_max_min)
+                        .label("Show Max/Min Delta")
+                        .on_toggle(move |v| {
+                            on_change(FootprintStudy::SummaryTable {
+                                show_delta,
+                                show_max_min: v,
+                                show_volume,
+                            })
+                        });
+
+                    let volume_checkbox = checkbox(show_volume)
+                        .label("Show Volume")
+                        .on_toggle(move |v| {
+                            on_change(FootprintStudy::SummaryTable {
+                                show_delta,
+                                show_max_min,
+                                show_volume: v,
+                            })
+                        });
+
+                    column![delta_checkbox, max_min_checkbox, volume_checkbox]
+                        .padding(8)
+                        .spacing(8)
+                        .into()
+                }
+                FootprintStudy::VolumeProfile {
+                    show_numbers,
+                    bar_width_pct,
+                    show_delta_color,
+                } => {
+                    let numbers_checkbox = checkbox(show_numbers).label("Show values").on_toggle(
+                        move |v| {
+                            on_change(FootprintStudy::VolumeProfile {
+                                show_numbers: v,
+                                bar_width_pct,
+                                show_delta_color,
+                            })
+                        },
+                    );
+
+                    let delta_checkbox = checkbox(show_delta_color).label("Delta coloring").on_toggle(
+                        move |v| {
+                            on_change(FootprintStudy::VolumeProfile {
+                                show_numbers,
+                                bar_width_pct,
+                                show_delta_color: v,
+                            })
+                        },
+                    );
+
+                    let width_slider = {
+                        let info_text = text(format!("Width: {}%", (bar_width_pct * 100.0) as u32));
+                        let slider_ui = slider(0.1..=1.0, bar_width_pct, move |new_value| {
+                            on_change(FootprintStudy::VolumeProfile {
+                                show_numbers,
+                                bar_width_pct: new_value,
+                                show_delta_color,
+                            })
+                        })
+                        .step(0.05);
+
+                        column![info_text, slider_ui].spacing(4)
+                    };
+
+                    column![numbers_checkbox, delta_checkbox, width_slider]
+                        .padding(8)
+                        .spacing(8)
                         .into()
                 }
             }

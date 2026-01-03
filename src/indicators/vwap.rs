@@ -197,7 +197,7 @@ impl Indicator for Vwap {
             last_candle_pv: 0.0,
             last_candle_vol: 0.0,
             last_candle_pv_sq: 0.0,
-            last_interval: 0,
+            last_interval: 60000, // Default to 1m
         }
     }
 
@@ -224,9 +224,8 @@ impl Indicator for Vwap {
                 }
                 self.last_candle_time = Some(kline.time);
             }
-        } else {
-            self.last_candle_time = Some(kline.time);
         }
+        self.last_candle_time = Some(kline.time);
 
         self.cumulative_pv += pv;
         self.cumulative_volume += volume;
@@ -248,7 +247,7 @@ impl Indicator for Vwap {
 
     fn update_tick(&mut self, tick: &Trade) {
         if self.is_new_session(tick.time) {
-            self.reset_stats();
+            self.reset();
             self.last_session_boundary = tick.time;
         }
 
@@ -262,11 +261,8 @@ impl Indicator for Vwap {
             self.cumulative_volume += volume;
             self.cumulative_pv_sq += pv2;
 
-            let candle_start = if self.last_interval > 0 {
-                (tick.time / self.last_interval) * self.last_interval
-            } else {
-                tick.time
-            };
+            let interval = if self.last_interval > 0 { self.last_interval } else { 60000 };
+            let candle_start = (tick.time / interval) * interval;
 
             if let Some(last_time) = self.last_candle_time {
                 if candle_start == last_time {
@@ -309,12 +305,14 @@ impl Indicator for Vwap {
         
         let get_x = |ts: u64| -> f32 {
             let diff = ts as f64 - ctx.latest_x as f64;
-            (diff / ctx.interval as f64 * ctx.cell_width as f64) as f32
+            let val = (diff / ctx.interval as f64 * ctx.cell_width as f64) as f32;
+            val.clamp(-1e6, 1e6)
         };
 
         let get_y = |price: f64| -> f32 {
             let diff = (price - ctx.base_price) / ctx.tick_size;
-            -(diff as f32 * ctx.cell_height)
+            let val = -(diff as f32 * ctx.cell_height);
+            val.clamp(-1e6, 1e6)
         };
 
         let visible_points: Vec<(u64, f64, f64)> = self.points.range(earliest..=latest)
@@ -334,35 +332,72 @@ impl Indicator for Vwap {
                 // Draw filled area for the widest band
                 if self.fill_bands && i == 2 && visible_points.len() >= 2 {
                      let fill_path = Path::new(|builder| {
-                         let first = visible_points[0];
-                         builder.move_to(Point::new(get_x(first.0), get_y(first.1 + first.2 * multiplier)));
-                         for p in visible_points.iter().skip(1) {
-                             builder.line_to(Point::new(get_x(p.0), get_y(p.1 + p.2 * multiplier)));
+                         let mut points = Vec::new();
+                         // Collect valid upper points
+                         for p in visible_points.iter() {
+                             let val = p.1 + p.2 * multiplier;
+                             let x = get_x(p.0);
+                             let y = get_y(val);
+                             if x.is_finite() && y.is_finite() {
+                                 points.push(Point::new(x, y));
+                             }
                          }
-                         for p in visible_points.iter().rev() {
-                             builder.line_to(Point::new(get_x(p.0), get_y(p.1 - p.2 * multiplier)));
+                         
+                         if !points.is_empty() {
+                             builder.move_to(points[0]);
+                             for p in points.iter().skip(1) {
+                                 builder.line_to(*p);
+                             }
+                             
+                             // Lower points in reverse
+                             for p in visible_points.iter().rev() {
+                                 let val = p.1 - p.2 * multiplier;
+                                 let x = get_x(p.0);
+                                 let y = get_y(val);
+                                 if x.is_finite() && y.is_finite() {
+                                    builder.line_to(Point::new(x, y));
+                                 }
+                             }
+                             builder.close();
                          }
-                         builder.close();
                      });
                      ctx.frame.fill(&fill_path, Color { a: self.band_alpha * 0.4, ..self.band_color });
                 }
 
                 // Stroke upper band
                 let u_path = Path::new(|builder| {
-                    let first = visible_points[0];
-                    builder.move_to(Point::new(get_x(first.0), get_y(first.1 + first.2 * multiplier)));
-                    for p in visible_points.iter().skip(1) {
-                        builder.line_to(Point::new(get_x(p.0), get_y(p.1 + p.2 * multiplier)));
+                    let mut first = true;
+                    for p in visible_points.iter() {
+                         let val = p.1 + p.2 * multiplier;
+                         let x = get_x(p.0);
+                         let y = get_y(val);
+                         if x.is_finite() && y.is_finite() {
+                             if first {
+                                 builder.move_to(Point::new(x, y));
+                                 first = false;
+                             } else {
+                                 builder.line_to(Point::new(x, y));
+                             }
+                         }
                     }
                 });
                 ctx.frame.stroke(&u_path, Stroke::default().with_color(current_band_color).with_width(1.0 / scaling));
 
                 // Stroke lower band
                 let l_path = Path::new(|builder| {
-                    let first = visible_points[0];
-                    builder.move_to(Point::new(get_x(first.0), get_y(first.1 - first.2 * multiplier)));
-                    for p in visible_points.iter().skip(1) {
-                        builder.line_to(Point::new(get_x(p.0), get_y(p.1 - p.2 * multiplier)));
+                    let mut first = true;
+                    for p in visible_points.iter() {
+                         let val = p.1 - p.2 * multiplier;
+                         let x = get_x(p.0);
+                         let y = get_y(val);
+                         if x.is_finite() && y.is_finite() {
+                             if first {
+                                 builder.move_to(Point::new(x, y));
+                                 first = false;
+                             } else {
+                                 builder.line_to(Point::new(x, y));
+                             }
+                         }
                     }
                 });
                 ctx.frame.stroke(&l_path, Stroke::default().with_color(current_band_color).with_width(1.0 / scaling));
@@ -371,10 +406,20 @@ impl Indicator for Vwap {
 
         // Draw VWAP line
         let path = Path::new(|builder| {
-            let first = visible_points[0];
-            builder.move_to(Point::new(get_x(first.0), get_y(first.1)));
-            for point in visible_points.iter().skip(1) {
-                builder.line_to(Point::new(get_x(point.0), get_y(point.1)));
+            let mut first = true;
+            for point in visible_points {
+                let x = get_x(point.0);
+                let y = get_y(point.1);
+                
+                if x.is_finite() && y.is_finite() {
+                    let p = Point::new(x, y);
+                    if first {
+                        builder.move_to(p);
+                        first = false;
+                    } else {
+                        builder.line_to(p);
+                    }
+                }
             }
         });
 

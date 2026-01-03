@@ -1,0 +1,168 @@
+    Checking flowsurface v0.8.6 (F:\desktop\flowsurface-main)
+warning: unused imports: `Path` and `Stroke`
+ --> src\indicators\volume_profile.rs:7:28
+  |
+7 | use iced::widget::canvas::{Path, Stroke};
+  |                            ^^^^  ^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused imports: `Rectangle` and `Vector`
+ --> src\indicators\volume_profile.rs:8:26
+  |
+8 | use iced::{Color, Point, Rectangle, Vector};
+  |                          ^^^^^^^^^  ^^^^^^
+
+error[E0599]: no function or associated item named `from_units` found for struct `PriceStep` in the current scope
+   --> src\indicators\volume_profile.rs:236:35
+    |
+236 |             tick_size: PriceStep::from_units(100), // Default 0.000001
+    |                                   ^^^^^^^^^^ function or associated item not found in `PriceStep`
+    |
+note: if you're trying to build a new `PriceStep` consider using one of the following associated functions:
+      PriceStep::from_f32_lossy
+      PriceStep::from_f32
+   --> F:\desktop\flowsurface-main\exchange\src\util.rs:79:5
+    |
+ 79 |     pub fn from_f32_lossy(step: f32) -> Self {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+ 87 |     pub fn from_f32(step: f32) -> Self {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error[E0599]: no method named `to_f32_lossy` found for type `f64` in the current scope
+   --> src\indicators\volume_profile.rs:305:85
+    |
+305 |                 let diff = (price.to_f32() as f64 - ctx.base_price) / ctx.tick_size.to_f32_lossy() as f64;
+    |                                                                                     ^^^^^^^^^^^^
+    |
+help: there is a method `to_f32` with a similar name
+    |
+305 -                 let diff = (price.to_f32() as f64 - ctx.base_price) / ctx.tick_size.to_f32_lossy() as f64;
+305 +                 let diff = (price.to_f32() as f64 - ctx.base_price) / ctx.tick_size.to_f32() as f64;
+    |
+
+warning: variable does not need to be mutable
+  --> src\indicators\volume_profile.rs:86:17
+   |
+86 |             let mut low_idx = poc_price;
+   |                 ----^^^^^^^
+   |                 |
+   |                 help: remove this `mut`
+   |
+   = note: `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+
+warning: variable does not need to be mutable
+  --> src\indicators\volume_profile.rs:87:17
+   |
+87 |             let mut high_idx = poc_price;
+   |                 ----^^^^^^^^
+   |                 |
+   |                 help: remove this `mut`
+
+warning: variable does not need to be mutable
+  --> src\indicators\volume_profile.rs:92:17
+   |
+92 |             let mut p_idx = prices.iter().position(|&p| p == poc_price).unwrap();
+   |                 ----^^^^^
+   |                 |
+   |                 help: remove this `mut`
+
+warning: unused variable: `low_idx`
+  --> src\indicators\volume_profile.rs:86:17
+   |
+86 |             let mut low_idx = poc_price;
+   |                 ^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_low_idx`
+   |
+   = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused variable: `high_idx`
+  --> src\indicators\volume_profile.rs:87:17
+   |
+87 |             let mut high_idx = poc_price;
+   |                 ^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_high_idx`
+
+error[E0503]: cannot use `self.tick_size` because it was mutably borrowed
+   --> src\indicators\volume_profile.rs:248:47
+    |
+241 |         let session = self.current_session_mut(kline.time);
+    |                       ---- `*self` is borrowed here
+...
+248 |         let low_bin = kline.low.round_to_step(self.tick_size);
+    |                                               ^^^^^^^^^^^^^^ use of borrowed `*self`
+...
+256 |             session.add_volume(curr, vol_per_step);
+    |             ------- borrow later used here
+
+error[E0503]: cannot use `self.tick_size` because it was mutably borrowed
+   --> src\indicators\volume_profile.rs:249:49
+    |
+241 |         let session = self.current_session_mut(kline.time);
+    |                       ---- `*self` is borrowed here
+...
+249 |         let high_bin = kline.high.round_to_step(self.tick_size);
+    |                                                 ^^^^^^^^^^^^^^ use of borrowed `*self`
+...
+256 |             session.add_volume(curr, vol_per_step);
+    |             ------- borrow later used here
+
+error[E0503]: cannot use `self.tick_size` because it was mutably borrowed
+   --> src\indicators\volume_profile.rs:251:71
+    |
+241 |         let session = self.current_session_mut(kline.time);
+    |                       ---- `*self` is borrowed here
+...
+251 |         let steps = Price::steps_between_inclusive(low_bin, high_bin, self.tick_size).unwrap_or(1);
+    |                                                                       ^^^^^^^^^^^^^^ use of borrowed `*self`
+...
+256 |             session.add_volume(curr, vol_per_step);
+    |             ------- borrow later used here
+
+error[E0503]: cannot use `self.tick_size` because it was mutably borrowed
+   --> src\indicators\volume_profile.rs:257:38
+    |
+241 |         let session = self.current_session_mut(kline.time);
+    |                       ---- `*self` is borrowed here
+...
+256 |             session.add_volume(curr, vol_per_step);
+    |             ------- borrow later used here
+257 |             curr = curr.add_steps(1, self.tick_size);
+    |                                      ^^^^^^^^^^^^^^ use of borrowed `*self`
+
+error[E0503]: cannot use `self.value_area_pct` because it was mutably borrowed
+   --> src\indicators\volume_profile.rs:260:35
+    |
+241 |         let session = self.current_session_mut(kline.time);
+    |                       ---- `*self` is borrowed here
+...
+260 |         session.calculate_metrics(self.value_area_pct);
+    |                 ----------------- ^^^^^^^^^^^^^^^^^^^ use of borrowed `*self`
+    |                 |
+    |                 borrow later used by call
+
+error[E0503]: cannot use `self.tick_size` because it was mutably borrowed
+   --> src\indicators\volume_profile.rs:267:50
+    |
+264 |         let session = self.current_session_mut(tick.time);
+    |                       ---- `*self` is borrowed here
+...
+267 |         let price_bin = tick.price.round_to_step(self.tick_size);
+    |                                                  ^^^^^^^^^^^^^^ use of borrowed `*self`
+268 |         session.add_volume(price_bin, tick.qty);
+    |         ------- borrow later used here
+
+error[E0503]: cannot use `self.value_area_pct` because it was mutably borrowed
+   --> src\indicators\volume_profile.rs:270:35
+    |
+264 |         let session = self.current_session_mut(tick.time);
+    |                       ---- `*self` is borrowed here
+...
+270 |         session.calculate_metrics(self.value_area_pct);
+    |                 ----------------- ^^^^^^^^^^^^^^^^^^^ use of borrowed `*self`
+    |                 |
+    |                 borrow later used by call
+
+Some errors have detailed explanations: E0503, E0599.
+For more information about an error, try `rustc --explain E0503`.
+warning: `flowsurface` (bin "flowsurface") generated 7 warnings
+error: could not compile `flowsurface` (bin "flowsurface") due to 9 previous errors; 7 warnings emitted

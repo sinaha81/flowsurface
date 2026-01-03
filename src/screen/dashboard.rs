@@ -7,7 +7,7 @@ pub use sidebar::Sidebar;
 
 use super::DashboardError;
 use crate::{
-    chart,
+    chart::{self, Chart},
     screen::dashboard::tickers_table::TickersTable,
     style,
     widget::toast::Toast,
@@ -45,6 +45,7 @@ pub enum Message {
     SavePopoutSpecs(HashMap<window::Id, WindowSpec>),
     ErrorOccurred(Option<uuid::Uuid>, DashboardError),
     Notification(Toast),
+    ReloadData(uuid::Uuid),
     DistributeFetchedData {
         layout_id: uuid::Uuid,
         pane_id: uuid::Uuid,
@@ -184,6 +185,20 @@ impl Dashboard {
                     if let Some((_, spec)) = self.popout.get_mut(&window_id) {
                         *spec = new_spec;
                     }
+                }
+            }
+            Message::ReloadData(pane_id) => {
+                if let Some(state) = self.get_mut_pane_state_by_uuid(main_window.id, pane_id) {
+                    match &mut state.content {
+                        pane::Content::Kline { chart: Some(c), .. } => {
+                            c.clear_data();
+                        }
+                        pane::Content::Heatmap { chart: Some(c), .. } => {
+                            c.clear_data();
+                        }
+                        _ => {}
+                    }
+                    return (self.refresh_streams(main_window.id), None);
                 }
             }
             Message::ErrorOccurred(pane_id, err) => match pane_id {

@@ -59,6 +59,7 @@ pub enum Message {
     DoubleClick(AxisScaleClicked),
     EditIndicator(usize),
     RemoveModularIndicator(usize),
+    ReloadData,
 }
 
 pub trait Chart: PlotConstants + canvas::Program<Message> {
@@ -71,6 +72,8 @@ pub trait Chart: PlotConstants + canvas::Program<Message> {
     fn invalidate_all(&mut self);
 
     fn invalidate_crosshair(&mut self);
+
+    fn clear_data(&mut self);
 
     fn view_indicators(&'_ self, enabled: &[Self::IndicatorKind]) -> Vec<Element<'_, Message>>;
 
@@ -493,6 +496,7 @@ pub fn update<T: Chart>(chart: &mut T, message: &Message) {
         }
         Message::CrosshairMoved => return chart.invalidate_crosshair(),
         Message::EditIndicator(_) | Message::RemoveModularIndicator(_) => {}
+        Message::ReloadData => {}
     }
     chart.invalidate_all();
 }
