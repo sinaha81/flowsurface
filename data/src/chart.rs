@@ -44,6 +44,13 @@ impl<D: DataPoint> PlotData<D> {
             }
         }
     }
+
+    pub fn clear(&mut self) {
+        match self {
+            PlotData::TimeBased(timeseries) => timeseries.datapoints.clear(),
+            PlotData::TickBased(tick_aggr) => tick_aggr.datapoints.clear(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, Default)]

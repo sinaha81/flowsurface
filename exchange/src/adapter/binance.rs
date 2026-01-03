@@ -815,12 +815,19 @@ async fn fetch_depth(
     let limiter = limiter_from_market_type(market_type);
     let text = crate::limiter::http_request_with_limiter(&url, limiter, weight, None, None).await?;
 
+    if text.trim().is_empty() {
+        return Err(AdapterError::ParseError(format!("Empty response for depth from {}", url)));
+    }
+    if text.trim().starts_with('<') {
+        return Err(AdapterError::ParseError(format!("Received HTML (blocked?) from {}", url)));
+    }
+
     let size_in_quote_ccy = volume_size_unit() == SizeUnit::Quote;
 
     match market_type {
         MarketKind::Spot => {
             let fetched_depth: FetchedSpotDepth =
-                serde_json::from_str(&text).map_err(|e| AdapterError::ParseError(e.to_string()))?;
+                serde_json::from_str(&text).map_err(|e| AdapterError::ParseError(format!("Depth parse error (Spot): {e}. Body index 0..20: {:?}", &text.chars().take(20).collect::<String>())))?;
 
             let depth = DepthPayload {
                 last_update_id: fetched_depth.update_id,
@@ -847,7 +854,7 @@ async fn fetch_depth(
         }
         MarketKind::LinearPerps | MarketKind::InversePerps => {
             let fetched_depth: FetchedPerpDepth =
-                serde_json::from_str(&text).map_err(|e| AdapterError::ParseError(e.to_string()))?;
+                serde_json::from_str(&text).map_err(|e| AdapterError::ParseError(format!("Depth parse error (Perp): {e}. Body index 0..20: {:?}", &text.chars().take(20).collect::<String>())))?;
 
             let depth = DepthPayload {
                 last_update_id: fetched_depth.update_id,
@@ -1028,14 +1035,11 @@ pub async fn fetch_ticksize(
         MarketKind::InversePerps => (INVERSE_PERP_DOMAIN.to_string() + "/dapi/v1/exchangeInfo", 1),
     };
 
-    let response_text = crate::limiter::HTTP_CLIENT
-        .get(&url)
-        .send()
-        .await
-        .map_err(AdapterError::FetchError)?
-        .text()
-        .await
-        .map_err(AdapterError::FetchError)?;
+    let limiter = limiter_from_market_type(market);
+    // Use a small weight for exchangeInfo as it's infrequent but heavy
+    let weight = 20;
+
+    let response_text = crate::limiter::http_request_with_limiter(&url, limiter, weight, None, None).await?;
 
     let exchange_info: serde_json::Value = serde_json::from_str(&response_text)
         .map_err(|e| AdapterError::ParseError(format!("Failed to parse exchange info: {e}")))?;

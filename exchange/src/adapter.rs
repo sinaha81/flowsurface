@@ -126,6 +126,8 @@ pub enum AdapterError {
     WebsocketError(String),
     #[error("Invalid request: {0}")]
     InvalidRequest(String),
+    #[error("All proxies failed: {0}")]
+    AllProxiesFailed(String),
 }
 
 impl AdapterError {
@@ -146,6 +148,10 @@ impl AdapterError {
             AdapterError::WebsocketError(err) => {
                 log::error!("Adapter websocket error: {err}");
                 "Realtime connection error. Trying to reconnect..."
+            }
+            AdapterError::AllProxiesFailed(err) => {
+                log::error!("All proxies failed: {err}");
+                "Connection failed on all configured proxies. Please check your proxy settings."
             }
         }
     }

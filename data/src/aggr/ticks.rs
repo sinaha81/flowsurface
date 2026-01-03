@@ -57,7 +57,9 @@ impl TickAccumulation {
 
     pub fn max_cluster_qty(&self, cluster_kind: ClusterKind, highest: Price, lowest: Price) -> f32 {
         match cluster_kind {
-            ClusterKind::BidAsk => self.footprint.max_qty_by(highest, lowest, f32::max),
+            ClusterKind::BidAsk | ClusterKind::VolumeProfile => {
+                self.footprint.max_qty_by(highest, lowest, f32::max)
+            }
             ClusterKind::DeltaProfile => self
                 .footprint
                 .max_qty_by(highest, lowest, |buy, sell| (buy - sell).abs()),

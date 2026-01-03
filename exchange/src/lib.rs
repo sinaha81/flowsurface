@@ -3,6 +3,7 @@ pub mod connect;
 pub mod depth;
 pub mod fetcher;
 mod limiter;
+pub use limiter::{set_global_proxy, ProxyConfig, CustomProxy, ProxyProtocol};
 pub mod util;
 
 use crate::util::{ContractSize, MinQtySize, MinTicksize, Price};

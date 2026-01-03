@@ -1,11 +1,279 @@
 use crate::adapter::AdapterError;
 
 use reqwest::{Client, Method, Response};
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use std::sync::LazyLock;
 use std::time::{Duration, Instant};
+use std::sync::{RwLock, LazyLock};
 
-pub static HTTP_CLIENT: LazyLock<Client> = LazyLock::new(Client::new);
+use std::sync::atomic::Ordering;
+
+pub fn get_client() -> Client {
+    PROXY_MANAGER.read().unwrap().get_best_instance().map(|i| i.client.clone()).unwrap_or_else(|| Client::new())
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
+pub enum ProxyProtocol {
+    #[default]
+    Auto,
+    Http,
+    Https,
+    Socks4,
+    Socks5,
+}
+
+impl ProxyProtocol {
+    pub fn all() -> &'static [Self] {
+        &[Self::Auto, Self::Http, Self::Https, Self::Socks4, Self::Socks5]
+    }
+}
+
+impl std::fmt::Display for ProxyProtocol {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ProxyProtocol::Auto => write!(f, "auto"),
+            ProxyProtocol::Http => write!(f, "http"),
+            ProxyProtocol::Https => write!(f, "https"),
+            ProxyProtocol::Socks4 => write!(f, "socks4"),
+            ProxyProtocol::Socks5 => write!(f, "socks5"),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CustomProxy {
+    pub protocol: ProxyProtocol,
+    pub host: String,
+    pub port: u16,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+struct CustomProxyOuter {
+    #[serde(rename = "Custom")]
+    inner: CustomProxy,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+struct CustomProxyVec {
+    #[serde(rename = "Custom")]
+    inner: Vec<CustomProxy>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub enum ProxyConfig {
+    System,
+    None,
+    Custom(Vec<CustomProxy>),
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(untagged)]
+enum ProxyConfigDe {
+    String(String),
+    SingleTagged(CustomProxyOuter),
+    MultiTagged(CustomProxyVec),
+    MultiUntagged(Vec<CustomProxy>),
+    SingleUntagged(CustomProxy),
+}
+
+impl<'de> Deserialize<'de> for ProxyConfig {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let de = ProxyConfigDe::deserialize(deserializer)?;
+        match de {
+            ProxyConfigDe::String(s) => match s.as_str() {
+                "System" => Ok(ProxyConfig::System),
+                "None" => Ok(ProxyConfig::None),
+                _ => Err(serde::de::Error::custom(format!("Invalid ProxyConfig string: {}", s))),
+            },
+            ProxyConfigDe::SingleTagged(s) => Ok(ProxyConfig::Custom(vec![s.inner])),
+            ProxyConfigDe::MultiTagged(m) => Ok(ProxyConfig::Custom(m.inner)),
+            ProxyConfigDe::MultiUntagged(v) => Ok(ProxyConfig::Custom(v)),
+            ProxyConfigDe::SingleUntagged(p) => Ok(ProxyConfig::Custom(vec![p])),
+        }
+    }
+}
+
+impl Default for ProxyConfig {
+    fn default() -> Self {
+        Self::System
+    }
+}
+
+use std::sync::atomic::AtomicUsize;
+use std::sync::Arc;
+
+pub struct ProxyHealth {
+    pub is_healthy: bool,
+    pub last_success: Option<Instant>,
+    pub failure_count: usize,
+    pub avg_latency: Duration,
+}
+
+impl Default for ProxyHealth {
+    fn default() -> Self {
+        Self {
+            is_healthy: true,
+            last_success: None,
+            failure_count: 0,
+            avg_latency: Duration::from_millis(0),
+        }
+    }
+}
+
+pub struct ProxyInstance {
+    pub config: Option<CustomProxy>, // None means System or Direct
+    pub client: Client,
+    pub health: Arc<RwLock<ProxyHealth>>,
+}
+
+pub struct ProxyManager {
+    pub instances: Vec<ProxyInstance>,
+    pub rotation_index: AtomicUsize,
+}
+
+impl ProxyManager {
+    pub fn new(config: ProxyConfig) -> Result<Self, AdapterError> {
+        let mut instances = Vec::new();
+
+        match config {
+            ProxyConfig::System => {
+                instances.push(ProxyInstance {
+                    config: None,
+                    client: Client::builder().build().map_err(AdapterError::FetchError)?,
+                    health: Arc::new(RwLock::new(ProxyHealth::default())),
+                });
+            }
+            ProxyConfig::None => {
+                instances.push(ProxyInstance {
+                    config: None,
+                    client: Client::builder()
+                        .no_proxy()
+                        .build()
+                        .map_err(AdapterError::FetchError)?,
+                    health: Arc::new(RwLock::new(ProxyHealth::default())),
+                });
+            }
+            ProxyConfig::Custom(proxies) => {
+                for custom in proxies {
+                    let url = if custom.protocol == ProxyProtocol::Auto {
+                        if custom.host.contains("://") {
+                            custom.host.clone()
+                        } else if custom.port == 1080
+                            || custom.port == 1081
+                            || custom.port == 7890
+                            || custom.port == 7891
+                        {
+                            format!("socks5://{}:{}", custom.host, custom.port)
+                        } else {
+                            format!("http://{}:{}", custom.host, custom.port)
+                        }
+                    } else {
+                        format!("{}://{}:{}", custom.protocol, custom.host, custom.port)
+                    };
+
+                    let proxy = reqwest::Proxy::all(&url)
+                        .map_err(|e| AdapterError::InvalidRequest(e.to_string()))?;
+                    let client = Client::builder()
+                        .proxy(proxy)
+                        .timeout(Duration::from_secs(10))
+                        .build()
+                        .map_err(AdapterError::FetchError)?;
+
+                    instances.push(ProxyInstance {
+                        config: Some(custom),
+                        client,
+                        health: Arc::new(RwLock::new(ProxyHealth::default())),
+                    });
+                }
+            }
+        }
+
+        Ok(Self {
+            instances,
+            rotation_index: AtomicUsize::new(0),
+        })
+    }
+
+    pub fn get_best_instance(&self) -> Option<&ProxyInstance> {
+        if self.instances.is_empty() {
+            return None;
+        }
+
+        let start_idx = self
+            .rotation_index
+            .fetch_add(1, Ordering::Relaxed) % self.instances.len();
+        
+        // Try to find a healthy instance starting from rotation_index
+        for i in 0..self.instances.len() {
+            let idx = (start_idx + i) % self.instances.len();
+            let inst = &self.instances[idx];
+            if inst.health.read().unwrap().is_healthy {
+                return Some(inst);
+            }
+        }
+
+        // If all unhealthy, return the one with least failures or just the first one
+        self.instances.get(start_idx)
+    }
+
+    // We could add a background task here to re-enable healthy proxies
+}
+
+pub static PROXY_MANAGER: LazyLock<RwLock<ProxyManager>> = LazyLock::new(|| {
+    RwLock::new(ProxyManager::new(ProxyConfig::System).unwrap())
+});
+
+pub fn set_global_proxy(config: ProxyConfig) -> Result<(), AdapterError> {
+    let manager = ProxyManager::new(config)?;
+    
+    // Acquire write lock and replace the manager
+    if let Ok(mut guard) = PROXY_MANAGER.write() {
+        *guard = manager;
+    } else {
+        return Err(AdapterError::WebsocketError("Failed to acquire lock on ProxyManager".to_string()));
+    }
+
+    // Spawn a background health checker if there are custom proxies
+    tokio::spawn(async move {
+        let mut interval = tokio::time::interval(Duration::from_secs(60));
+        loop {
+            interval.tick().await;
+            
+            let instances_to_check: Vec<_> = {
+                let manager_guard = PROXY_MANAGER.read().unwrap();
+                manager_guard.instances.iter()
+                    .filter(|inst| !inst.health.read().unwrap().is_healthy)
+                    .map(|inst| (inst.client.clone(), inst.health.clone()))
+                    .collect()
+            };
+
+            for (client, health_tracker) in instances_to_check {
+                log::info!("Performing background health check for proxy...");
+                let test_url = "https://www.google.com";
+                let start = Instant::now();
+                match client.get(test_url).timeout(Duration::from_secs(5)).send().await {
+                    Ok(_) => {
+                        let latency = start.elapsed();
+                        let mut h = health_tracker.write().unwrap();
+                        h.is_healthy = true;
+                        h.failure_count = 0;
+                        h.last_success = Some(Instant::now());
+                        h.avg_latency = latency;
+                        log::info!("Proxy recovered and is now healthy");
+                    }
+                    Err(_) => {
+                        log::debug!("Proxy still unhealthy");
+                    }
+                }
+            }
+        }
+    });
+
+    Ok(())
+}
 
 pub trait RateLimiter: Send + Sync {
     /// Prepare for a request with given weight. Returns wait time if needed.
@@ -34,30 +302,101 @@ pub async fn http_request_with_limiter<L: RateLimiter>(
         tokio::time::sleep(wait_time).await;
     }
 
-    let mut request_builder = HTTP_CLIENT.request(method.clone(), url);
+    let max_retries = 5;
+    let mut last_error = None;
 
-    if let Some(body) = json_body {
-        request_builder = request_builder.json(body);
+    for attempt in 0..max_retries {
+        let (client, health_tracker, proxy_info) = {
+            let manager = PROXY_MANAGER.read().unwrap();
+            let instance = match manager.get_best_instance() {
+                Some(i) => i,
+                None => {
+                    return Err(AdapterError::AllProxiesFailed("No healthy proxy instances available".to_string()));
+                }
+            };
+            let proxy_info = instance.config.as_ref()
+                .map(|c| format!("{}:{}", c.host, c.port))
+                .unwrap_or_else(|| "System/Direct".to_string());
+            (instance.client.clone(), instance.health.clone(), proxy_info)
+        };
+
+        let mut request_builder = client.request(method.clone(), url);
+        if let Some(body) = json_body {
+            request_builder = request_builder.json(body);
+        }
+
+        let start = Instant::now();
+        match request_builder.send().await {
+            Ok(response) => {
+                let latency = start.elapsed();
+                
+                // Update health on success
+                if let Ok(mut h) = health_tracker.write() {
+                    h.is_healthy = true;
+                    h.last_success = Some(Instant::now());
+                    h.failure_count = 0;
+                    // Exponential moving average for latency
+                    let alpha = 0.2;
+                    h.avg_latency = Duration::from_secs_f32(
+                        h.avg_latency.as_secs_f32() * (1.0 - alpha) + latency.as_secs_f32() * alpha
+                    );
+                }
+
+                if limiter_guard.should_exit_on_response(&response) {
+                    let status = response.status();
+                    log::error!(
+                        "HTTP error {} for: {}. (This may be a rate limit, geo-block, or other access issue.)",
+                        status,
+                        url
+                    );
+                    // If it's a 451 (Geo-blocked) or similar, maybe mark proxy as bad for this site?
+                    // For now we just return error
+                }
+
+                limiter_guard.update_from_response(&response, weight);
+                let body = response.text().await.map_err(AdapterError::FetchError)?;
+
+                // Detect HTML responses which usually mean the proxy is blocked/challenged
+                let trimmed = body.trim();
+                if trimmed.starts_with("<!") || trimmed.to_lowercase().starts_with("<html") {
+                    log::warn!(
+                        "Received HTML response for {} via {}. Proxy might be blocked. Retrying...",
+                        url, proxy_info
+                    );
+                    if let Ok(mut h) = health_tracker.write() {
+                        h.failure_count += 1;
+                        if h.failure_count >= 3 {
+                            h.is_healthy = false;
+                        }
+                    }
+                    last_error = Some(AdapterError::ParseError(format!("Received HTML instead of JSON via {}: {}", proxy_info, &trimmed[..trimmed.len().min(50)])));
+                    tokio::time::sleep(Duration::from_millis(500)).await;
+                    continue;
+                }
+
+                return Ok(body);
+            }
+            Err(e) => {
+                log::error!("Attempt {} failed for {}: {}", attempt + 1, url, e);
+                
+                // Update health on failure
+                if let Ok(mut h) = health_tracker.write() {
+                    h.failure_count += 1;
+                    if h.failure_count >= 3 {
+                        h.is_healthy = false;
+                        log::warn!("Proxy marked as unhealthy due to repeated failures");
+                    }
+                }
+                
+                last_error = Some(AdapterError::FetchError(e));
+                
+                // Small delay before retry with (hopefully) another proxy
+                tokio::time::sleep(Duration::from_millis(500)).await;
+            }
+        }
     }
 
-    let response = request_builder
-        .send()
-        .await
-        .map_err(AdapterError::FetchError)?;
-
-    if limiter_guard.should_exit_on_response(&response) {
-        let status = response.status();
-        log::error!(
-            "HTTP error {} for: {}. Exiting. (This may be a rate limit, geo-block, or other access issue.)",
-            status,
-            url
-        );
-        std::process::exit(1);
-    }
-
-    limiter_guard.update_from_response(&response, weight);
-
-    response.text().await.map_err(AdapterError::FetchError)
+    Err(AdapterError::AllProxiesFailed(format!("Failed after {} attempts. Last error: {:?}", max_retries, last_error)))
 }
 
 pub async fn http_parse_with_limiter<L, V>(

@@ -268,6 +268,10 @@ impl HistoricalDepth {
         self.price_levels.retain(|_, runs| !runs.is_empty());
     }
 
+    pub fn clear(&mut self) {
+        self.price_levels.clear();
+    }
+
     pub fn coalesced_runs(
         &self,
         earliest: u64,

@@ -16,10 +16,13 @@ pub struct KlineDataPoint {
 impl KlineDataPoint {
     pub fn max_cluster_qty(&self, cluster_kind: ClusterKind, highest: Price, lowest: Price) -> f32 {
         match cluster_kind {
-            ClusterKind::BidAsk => self.footprint.max_qty_by(highest, lowest, f32::max),
-            ClusterKind::DeltaProfile => self
-                .footprint
-                .max_qty_by(highest, lowest, |buy, sell| (buy - sell).abs()),
+            ClusterKind::BidAsk | ClusterKind::VolumeProfile => {
+                self.footprint.max_qty_by(highest, lowest, f32::max)
+            }
+            ClusterKind::DeltaProfile => {
+                self.footprint
+                    .max_qty_by(highest, lowest, |buy, sell| (buy - sell).abs())
+            }
         }
     }
 
@@ -129,9 +132,18 @@ impl GroupedTrades {
 }
 
 #[derive(Debug, Clone, Default)]
+pub struct FootprintSummary {
+    pub delta: f32,
+    pub max_delta: f32,
+    pub min_delta: f32,
+    pub total_volume: f32,
+}
+
+#[derive(Debug, Clone, Default)]
 pub struct KlineTrades {
     pub trades: FxHashMap<Price, GroupedTrades>,
     pub poc: Option<PointOfControl>,
+    pub summary: FootprintSummary,
 }
 
 impl KlineTrades {
@@ -139,6 +151,7 @@ impl KlineTrades {
         Self {
             trades: FxHashMap::default(),
             poc: None,
+            summary: FootprintSummary::default(),
         }
     }
 
@@ -160,6 +173,8 @@ impl KlineTrades {
             .entry(price)
             .and_modify(|group| group.add_trade(trade))
             .or_insert_with(|| GroupedTrades::new(trade));
+
+        self.update_summary(trade);
     }
 
     /// Add trade to the bin at the nearest step multiple (side-agnostic).
@@ -172,6 +187,16 @@ impl KlineTrades {
             .entry(price)
             .and_modify(|group| group.add_trade(trade))
             .or_insert_with(|| GroupedTrades::new(trade));
+
+        self.update_summary(trade);
+    }
+
+    fn update_summary(&mut self, trade: &Trade) {
+        self.summary.total_volume += trade.qty;
+        let delta_change = if trade.is_sell { -trade.qty } else { trade.qty };
+        self.summary.delta += delta_change;
+        self.summary.max_delta = self.summary.max_delta.max(self.summary.delta);
+        self.summary.min_delta = self.summary.min_delta.min(self.summary.delta);
     }
 
     pub fn max_qty_by<F>(&self, highest: Price, lowest: Price, f: F) -> f32
@@ -223,10 +248,11 @@ impl KlineTrades {
     pub fn clear(&mut self) {
         self.trades.clear();
         self.poc = None;
+        self.summary = FootprintSummary::default();
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Default, Deserialize, Serialize)]
+#[derive(Debug, Clone, PartialEq, Default, Deserialize, Serialize)]
 pub enum KlineChartKind {
     #[default]
     Candles,
@@ -276,13 +302,14 @@ pub enum ClusterKind {
     #[default]
     BidAsk,
     DeltaProfile,
+    VolumeProfile,
 }
 
 impl ClusterKind {
-    pub const ALL: [ClusterKind; 2] = [
+    pub const ALL: [ClusterKind; 3] = [
         ClusterKind::BidAsk,
-
         ClusterKind::DeltaProfile,
+        ClusterKind::VolumeProfile,
     ];
 }
 
@@ -290,8 +317,8 @@ impl std::fmt::Display for ClusterKind {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             ClusterKind::BidAsk => write!(f, "Bid/Ask"),
-
             ClusterKind::DeltaProfile => write!(f, "Delta Profile"),
+            ClusterKind::VolumeProfile => write!(f, "Volume Profile"),
         }
     }
 }
@@ -331,7 +358,7 @@ impl std::fmt::Display for ClusterScaling {
 
 impl std::cmp::Eq for ClusterScaling {}
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Deserialize, Serialize)]
 pub enum FootprintStudy {
     NPoC {
         lookback: usize,
@@ -340,6 +367,17 @@ pub enum FootprintStudy {
         threshold: usize,
         color_scale: Option<usize>,
         ignore_zeros: bool,
+        stack_count: usize, // Number of consecutive imbalances to trigger an extension
+    },
+    SummaryTable {
+        show_delta: bool,
+        show_max_min: bool,
+        show_volume: bool,
+    },
+    VolumeProfile {
+        show_numbers: bool,
+        bar_width_pct: f32,  // Percentage of candle width (0.0 - 1.0)
+        show_delta_color: bool,
     },
 }
 
@@ -352,17 +390,36 @@ impl FootprintStudy {
                     FootprintStudy::Imbalance { .. },
                     FootprintStudy::Imbalance { .. }
                 )
+                | (
+                    FootprintStudy::SummaryTable { .. },
+                    FootprintStudy::SummaryTable { .. }
+                )
+                | (
+                    FootprintStudy::VolumeProfile { .. },
+                    FootprintStudy::VolumeProfile { .. }
+                )
         )
     }
 }
 
 impl FootprintStudy {
-    pub const ALL: [FootprintStudy; 2] = [
+    pub const ALL: [FootprintStudy; 4] = [
         FootprintStudy::NPoC { lookback: 80 },
         FootprintStudy::Imbalance {
             threshold: 200,
             color_scale: Some(400),
             ignore_zeros: true,
+            stack_count: 3,
+        },
+        FootprintStudy::SummaryTable {
+            show_delta: true,
+            show_max_min: true,
+            show_volume: true,
+        },
+        FootprintStudy::VolumeProfile {
+            show_numbers: true,
+            bar_width_pct: 0.9,
+            show_delta_color: true,
         },
     ];
 }
@@ -372,6 +429,8 @@ impl std::fmt::Display for FootprintStudy {
         match self {
             FootprintStudy::NPoC { .. } => write!(f, "Naked Point of Control"),
             FootprintStudy::Imbalance { .. } => write!(f, "Imbalance"),
+            FootprintStudy::SummaryTable { .. } => write!(f, "Summary Table"),
+            FootprintStudy::VolumeProfile { .. } => write!(f, "Volume Profile"),
         }
     }
 }

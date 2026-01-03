@@ -806,7 +806,7 @@ pub async fn fetch_ticksize(
 
     let url = format!("{FETCH_DOMAIN}/v5/market/instruments-info?category={market}&limit=1000",);
 
-    let response_text = crate::limiter::HTTP_CLIENT
+    let response_text = crate::limiter::get_client()
         .get(&url)
         .send()
         .await

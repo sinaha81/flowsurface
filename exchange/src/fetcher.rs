@@ -6,7 +6,7 @@ use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, Ordering};
 use uuid::Uuid;
 
-static TRADE_FETCH_ENABLED: AtomicBool = AtomicBool::new(false);
+static TRADE_FETCH_ENABLED: AtomicBool = AtomicBool::new(true);
 
 pub fn toggle_trade_fetch(value: bool) {
     TRADE_FETCH_ENABLED.store(value, Ordering::Relaxed);
@@ -47,6 +47,7 @@ enum RequestStatus {
     Pending,
     Completed(u64),
     Failed(String),
+    Cancelled,
 }
 
 pub struct RequestHandler {
@@ -60,12 +61,21 @@ impl RequestHandler {
         }
     }
 
+    pub fn clear(&mut self) {
+        // Mark all requests as cancelled instead of removing them
+        // This prevents "Request overlaps" errors when async tasks complete
+        for request in self.requests.values_mut() {
+            request.status = RequestStatus::Cancelled;
+        }
+    }
+
     pub fn add_request(&mut self, fetch: FetchRange) -> Result<Option<Uuid>, ReqError> {
         let request = FetchRequest::new(fetch);
         let id = Uuid::new_v4();
 
         if let Some((existing_id, existing_req)) = self.requests.iter().find_map(|(k, v)| {
-            if v.same_with(&request) {
+            // Ignore cancelled requests
+            if v.status != RequestStatus::Cancelled && v.same_with(&request) {
                 Some((*k, v))
             } else {
                 None
@@ -83,6 +93,10 @@ impl RequestHandler {
                     }
                 }
                 RequestStatus::Pending => Err(ReqError::Overlaps),
+                RequestStatus::Cancelled => {
+                    // This shouldn't happen due to filter above, but handle gracefully
+                    Ok(Some(existing_id))
+                }
             };
         }
 
