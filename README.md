@@ -10,7 +10,7 @@ An experimental open-source desktop charting application. Supports Binance, Bybi
 
 <div align="center">
   <img
-    src="[https://github.com/sinaha81/flowsurface/blob/main/image.png](https://github.com/sinaha81/flowsurface/blob/main/image.png)"
+    src="https://github.com/sinaha81/flowsurface/edit/main/image.png"
     alt="Flowsurface screenshot"
     style="max-width: 100%; height: auto;"
   />
