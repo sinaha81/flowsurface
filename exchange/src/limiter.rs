@@ -320,7 +320,9 @@ pub async fn http_request_with_limiter<L: RateLimiter>(
             (instance.client.clone(), instance.health.clone(), proxy_info)
         };
 
-        let mut request_builder = client.request(method.clone(), url);
+        let mut request_builder = client.request(method.clone(), url)
+            .header("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+            .header("Accept", "application/json");
         if let Some(body) = json_body {
             request_builder = request_builder.json(body);
         }

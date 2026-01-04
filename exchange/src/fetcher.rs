@@ -92,7 +92,12 @@ impl RequestHandler {
                         Ok(None)
                     }
                 }
-                RequestStatus::Pending => Err(ReqError::Overlaps),
+                RequestStatus::Pending => {
+                    // Treat overlapping pending requests as valid, reusing the existing ID.
+                    // This prevents spamming the log with overlap errors when multiple panes 
+                    // request the same data simultaneously.
+                    Ok(Some(existing_id))
+                }
                 RequestStatus::Cancelled => {
                     // This shouldn't happen due to filter above, but handle gracefully
                     Ok(Some(existing_id))

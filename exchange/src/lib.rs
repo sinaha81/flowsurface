@@ -87,6 +87,8 @@ impl std::fmt::Display for Timeframe {
                 Timeframe::H4 => "4h",
                 Timeframe::H12 => "12h",
                 Timeframe::D1 => "1d",
+                Timeframe::W1 => "1w",
+                Timeframe::MN1 => "1M",
             }
         )
     }
@@ -109,6 +111,8 @@ pub enum Timeframe {
     H4,
     H12,
     D1,
+    W1,
+    MN1,
 }
 
 impl Timeframe {
@@ -148,7 +152,23 @@ impl Timeframe {
             Timeframe::H4 => 240,
             Timeframe::H12 => 720,
             Timeframe::D1 => 1440,
+            Timeframe::W1 => 10080,
+            Timeframe::MN1 => 43200, // Approximate (30 days)
             _ => panic!("Invalid timeframe: {:?}", self),
+        }
+    }
+
+    pub fn start_of_interval(self, ts_ms: u64) -> u64 {
+        match self {
+            Timeframe::MN1 => {
+                // Approximate monthly start
+                let ms_per_month = 30 * 24 * 60 * 60 * 1000;
+                (ts_ms / ms_per_month) * ms_per_month
+            }
+            _ => {
+                let ms = self.to_milliseconds();
+                (ts_ms / ms) * ms
+            }
         }
     }
 

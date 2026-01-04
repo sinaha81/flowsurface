@@ -3,7 +3,7 @@ use exchange::{TickMultiplier, TickerInfo, Timeframe};
 use serde::{Deserialize, Serialize};
 
 use crate::chart::{comparison, heatmap, kline};
-use crate::panel::{ladder, timeandsales};
+use crate::panel::{ladder, timeandsales, volume_profile};
 use crate::util::ok_or_default;
 
 use crate::chart::{
@@ -79,6 +79,12 @@ pub enum Pane {
         #[serde(deserialize_with = "ok_or_default", default)]
         link_group: Option<LinkGroup>,
     },
+    VolumeProfile {
+        stream_type: Vec<PersistStreamKind>,
+        settings: Settings,
+        #[serde(deserialize_with = "ok_or_default", default)]
+        link_group: Option<LinkGroup>,
+    },
 }
 
 impl Default for Pane {
@@ -147,6 +153,7 @@ pub enum VisualConfig {
     Kline(kline::Config),
     Ladder(ladder::Config),
     Comparison(comparison::Config),
+    VolumeProfile(volume_profile::Config),
 }
 
 impl VisualConfig {
@@ -184,6 +191,13 @@ impl VisualConfig {
             _ => None,
         }
     }
+
+    pub fn volume_profile(&self) -> Option<volume_profile::Config> {
+        match self {
+            Self::VolumeProfile(cfg) => Some(*cfg),
+            _ => None,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -195,10 +209,11 @@ pub enum ContentKind {
     ComparisonChart,
     TimeAndSales,
     Ladder,
+    VolumeProfile,
 }
 
 impl ContentKind {
-    pub const ALL: [ContentKind; 7] = [
+    pub const ALL: [ContentKind; 8] = [
         ContentKind::Starter,
         ContentKind::HeatmapChart,
         ContentKind::FootprintChart,
@@ -206,6 +221,7 @@ impl ContentKind {
         ContentKind::ComparisonChart,
         ContentKind::TimeAndSales,
         ContentKind::Ladder,
+        ContentKind::VolumeProfile,
     ];
 }
 
@@ -219,6 +235,7 @@ impl std::fmt::Display for ContentKind {
             ContentKind::ComparisonChart => "Comparison Chart",
             ContentKind::TimeAndSales => "Time&Sales",
             ContentKind::Ladder => "DOM/Ladder",
+            ContentKind::VolumeProfile => "Volume Profile",
         };
         write!(f, "{s}")
     }
@@ -266,11 +283,11 @@ impl PaneSetup {
             ContentKind::CandlestickChart | ContentKind::ComparisonChart => {
                 Some(current_basis.unwrap_or(Basis::Time(Timeframe::M15)))
             }
-            ContentKind::Starter | ContentKind::TimeAndSales => None,
+            ContentKind::Starter | ContentKind::TimeAndSales | ContentKind::VolumeProfile => None,
         };
 
         let tick_multiplier = match content_kind {
-            ContentKind::HeatmapChart | ContentKind::Ladder => {
+            ContentKind::HeatmapChart | ContentKind::Ladder | ContentKind::VolumeProfile => {
                 let tm = if !is_client_aggr && prev_is_client_aggr {
                     TickMultiplier(10.0)
                 } else if let Some(tm) = current_tick_multiplier {
