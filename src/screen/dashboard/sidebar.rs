@@ -19,6 +19,7 @@ pub enum Message {
     ToggleSidebarMenu(Option<sidebar::Menu>),
     SetSidebarPosition(sidebar::Position),
     TickersTable(super::tickers_table::Message),
+    ToggleConsole,
 }
 
 pub struct Sidebar {
@@ -82,6 +83,7 @@ impl Sidebar {
                     None => {}
                 }
             }
+            Message::ToggleConsole => {}
         }
 
         (Task::none(), None)
@@ -194,6 +196,15 @@ impl Sidebar {
             layout_modal_button,
             audio_btn,
             space::vertical(),
+             button_with_tooltip(
+                icon_text(Icon::Terminal, 14)
+                    .width(24)
+                    .align_x(Alignment::Center),
+                Message::ToggleConsole,
+                Some("Toggle Console"),
+                tooltip_position,
+                move |theme, status| crate::style::button::transparent(theme, status, false),
+            ),
             settings_modal_button,
         ]
         .width(32)

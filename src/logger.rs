@@ -5,11 +5,27 @@ use std::{
     process,
     sync::mpsc,
     thread,
+    collections::VecDeque,
+    sync::{Arc, RwLock, LazyLock},
 };
 
 pub use data::log::Error;
 
 const MAX_LOG_FILE_SIZE: u64 = 50 * 1024 * 1024; // 50 MB
+const MAX_BUFFER_LOGS: usize = 1000;
+
+#[derive(Debug, Clone)]
+pub struct LogEntry {
+    pub timestamp: String,
+    pub level: log::Level,
+    pub message: String,
+}
+
+pub type LogBuffer = VecDeque<LogEntry>;
+
+pub static LOG_BUFFER: LazyLock<Arc<RwLock<LogBuffer>>> = LazyLock::new(|| {
+    Arc::new(RwLock::new(VecDeque::with_capacity(MAX_BUFFER_LOGS)))
+});
 
 enum LogMessage {
     Content(Vec<u8>),
@@ -59,7 +75,23 @@ pub fn setup(is_debug: bool) -> Result<(), Error> {
         .level_for("data", level_filter)
         .level_for("exchange", level_filter)
         .level_for("flowsurface", level_filter)
+        .level_for("flowsurface", level_filter)
         .chain(io_sink)
+        .chain(fern::Output::call(|record| {
+            let msg = record.args().to_string();
+            let entry = LogEntry {
+                timestamp: chrono::Local::now().format("%H:%M:%S%.3f").to_string(),
+                level: record.level(),
+                message: msg,
+            };
+            
+            if let Ok(mut buffer) = LOG_BUFFER.write() {
+                if buffer.len() >= MAX_BUFFER_LOGS {
+                    buffer.pop_front();
+                }
+                buffer.push_back(entry);
+            }
+        }))
         .apply()?;
 
     Ok(())

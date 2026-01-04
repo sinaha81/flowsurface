@@ -10,7 +10,7 @@ use crate::{
         },
     },
     screen::dashboard::{
-        panel::{self, ladder::Ladder, timeandsales::TimeAndSales},
+        panel::{self, Panel, ladder::Ladder, timeandsales::TimeAndSales, volume_profile::VolumeProfile},
         tickers_table::TickersTable,
     },
     style::{self, Icon, icon_text},
@@ -318,6 +318,22 @@ impl State {
 
                     (content, streams)
                 }
+                ContentKind::VolumeProfile => {
+                    let config = self
+                        .settings
+                        .visual_config
+                        .as_ref()
+                        .and_then(|cfg| cfg.volume_profile());
+                    let content = Content::VolumeProfile(Some(VolumeProfile::new(
+                        config,
+                        derived_plan.ticker_info,
+                        derived_plan.tick_size,
+                    )));
+                    (content, vec![
+                        depth_stream(&derived_plan),
+                        kline_stream(derived_plan.ticker_info, Timeframe::M1),
+                    ])
+                }
                 ContentKind::Starter => unreachable!(),
             }
         };
@@ -408,6 +424,9 @@ impl State {
                         Some(chart.serializable_config()),
                     );
                 }
+            }
+            Content::VolumeProfile(Some(p)) => {
+                p.update_data(&[], klines);
             }
             _ => {
                 log::error!("pane content not candlestick or footprint");
@@ -606,14 +625,57 @@ impl State {
                     )
                 }
             }
+            Content::VolumeProfile(panel) => {
+                if let Some(panel) = panel {
+                    let base = panel::view(panel, timezone).map(move |message| {
+                        Message::PaneEvent(id, Event::PanelInteraction(message))
+                    });
+
+                    let settings_modal = || {
+                        match &self.modal {
+                            Some(Modal::Settings(state)) => {
+                                modal::pane::settings::volumeprofile_cfg_view(panel.config, id)
+                            }
+                            _ => column![].into(),
+                        }
+                    };
+
+                    self.compose_stack_view(
+                        base,
+                        id,
+                        None,
+                        compact_controls,
+                        settings_modal,
+                        None,
+                        tickers_table,
+                    )
+                } else {
+                    let base = uninitialized_base(ContentKind::VolumeProfile);
+                    self.compose_stack_view(
+                        base,
+                        id,
+                        None,
+                        compact_controls,
+                        || column![].into(),
+                        None,
+                        tickers_table,
+                    )
+                }
+            }
             Content::TimeAndSales(panel) => {
                 if let Some(panel) = panel {
                     let base = panel::view(panel, timezone).map(move |message| {
                         Message::PaneEvent(id, Event::PanelInteraction(message))
                     });
 
-                    let settings_modal =
-                        || modal::pane::settings::timesales_cfg_view(panel.config, id);
+                    let settings_modal = || {
+                        match &self.modal {
+                            Some(Modal::Settings(state)) => {
+                                modal::pane::settings::timesales_cfg_view(panel.config, id, state)
+                            }
+                            _ => column![].into(),
+                        }
+                    };
 
                     self.compose_stack_view(
                         base,
@@ -1431,14 +1493,21 @@ impl State {
                         modal::pane::settings::Message::TradeSizeInputChanged(val) => {
                             state.trade_size_input = val.clone();
                             if let Ok(v) = val.parse::<f64>() {
-                                if let Content::Heatmap { chart: Some(c), .. } = &mut self.content {
-                                    let mut cfg = c.visual_config();
-                                    let v_f32 = v as f32;
-                                    if cfg.trade_size_filter != v_f32 {
-                                        cfg.trade_size_filter = v_f32;
-                                        // Update the chart
-                                        c.set_visual_config(cfg);
+                                let v_f32 = v as f32;
+                                match &mut self.content {
+                                    Content::Heatmap { chart: Some(c), .. } => {
+                                        let mut cfg = c.visual_config();
+                                        if cfg.trade_size_filter != v_f32 {
+                                            cfg.trade_size_filter = v_f32;
+                                            c.set_visual_config(cfg);
+                                        }
                                     }
+                                    Content::TimeAndSales(Some(p)) => {
+                                        if p.config.trade_size_filter != v_f32 {
+                                            p.config.trade_size_filter = v_f32;
+                                        }
+                                    }
+                                    _ => {}
                                 }
                             }
                         }
@@ -1754,6 +1823,9 @@ impl State {
             Content::Comparison(chart) => chart
                 .as_mut()
                 .and_then(|c| c.invalidate(Some(now)).map(Action::Chart)),
+            Content::VolumeProfile(panel) => panel
+                .as_mut()
+                .and_then(|p| p.invalidate(Some(now)).map(Action::Panel)),
         }
     }
 
@@ -1767,7 +1839,7 @@ impl State {
                     None
                 }
             }
-            Content::Ladder(_) | Content::TimeAndSales(_) => Some(100),
+            Content::Ladder(_) | Content::TimeAndSales(_) | Content::VolumeProfile(_) => Some(100),
             Content::Starter => None,
         }
     }
@@ -1851,6 +1923,7 @@ pub enum Content {
     TimeAndSales(Option<TimeAndSales>),
     Ladder(Option<Ladder>),
     Comparison(Option<ComparisonChart>),
+    VolumeProfile(Option<VolumeProfile>),
 }
 
 impl Content {
@@ -2078,6 +2151,7 @@ impl Content {
             ContentKind::ComparisonChart => Content::Comparison(None),
             ContentKind::TimeAndSales => Content::TimeAndSales(None),
             ContentKind::Ladder => Content::Ladder(None),
+            ContentKind::VolumeProfile => Content::VolumeProfile(None),
         }
     }
 
@@ -2088,6 +2162,7 @@ impl Content {
             Content::TimeAndSales(panel) => Some(panel.as_ref()?.last_update()),
             Content::Ladder(panel) => Some(panel.as_ref()?.last_update()),
             Content::Comparison(chart) => Some(chart.as_ref()?.last_update()),
+            Content::VolumeProfile(panel) => Some(panel.as_ref()?.last_update()),
             Content::Starter => None,
         }
     }
@@ -2241,6 +2316,7 @@ impl Content {
             Content::Kline { indicators, .. } => column_drag::reorder_vec(indicators, event),
             Content::TimeAndSales(_)
             | Content::Ladder(_)
+            | Content::VolumeProfile(_)
             | Content::Starter
             | Content::Comparison(_) => {
                 panic!("indicator reorder on {} pane", self)
@@ -2262,6 +2338,9 @@ impl Content {
             (Content::Comparison(Some(chart)), VisualConfig::Comparison(cfg)) => {
                 chart.config = cfg;
             }
+            (Content::VolumeProfile(Some(panel)), VisualConfig::VolumeProfile(cfg)) => {
+                panel.config = cfg;
+            }
             _ => {}
         }
     }
@@ -2278,6 +2357,7 @@ impl Content {
             }
             Content::TimeAndSales(_)
             | Content::Ladder(_)
+            | Content::VolumeProfile(_)
             | Content::Starter
             | Content::Comparison(_) => None,
         }
@@ -2325,6 +2405,7 @@ impl Content {
             Content::TimeAndSales(_) => ContentKind::TimeAndSales,
             Content::Ladder(_) => ContentKind::Ladder,
             Content::Comparison(_) => ContentKind::ComparisonChart,
+            Content::VolumeProfile(_) => ContentKind::VolumeProfile,
             Content::Starter => ContentKind::Starter,
         }
     }
@@ -2336,6 +2417,7 @@ impl Content {
             Content::TimeAndSales(panel) => panel.is_some(),
             Content::Ladder(panel) => panel.is_some(),
             Content::Comparison(chart) => chart.is_some(),
+            Content::VolumeProfile(panel) => panel.is_some(),
             Content::Starter => true,
         }
     }
@@ -2356,6 +2438,8 @@ impl PartialEq for Content {
                 | (Content::Kline { .. }, Content::Kline { .. })
                 | (Content::TimeAndSales(_), Content::TimeAndSales(_))
                 | (Content::Ladder(_), Content::Ladder(_))
+                | (Content::Comparison(_), Content::Comparison(_))
+                | (Content::VolumeProfile(_), Content::VolumeProfile(_))
         )
     }
 }

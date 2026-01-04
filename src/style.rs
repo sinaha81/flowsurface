@@ -54,6 +54,7 @@ pub enum Icon {
     DragHandle,
     Folder,
     ExternalLink,
+    Terminal,
 }
 
 impl From<Icon> for char {
@@ -90,6 +91,7 @@ impl From<Icon> for char {
             Icon::DragHandle => '\u{E817}',
             Icon::Folder => '\u{F114}',
             Icon::ExternalLink => '\u{F14C}',
+            Icon::Terminal => '\u{F120}', // FontAwesome term icon
         }
     }
 }

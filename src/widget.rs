@@ -14,6 +14,7 @@ use iced::{
 pub mod chart;
 pub mod color_picker;
 pub mod column_drag;
+pub mod console;
 pub mod decorate;
 pub mod multi_split;
 pub mod toast;

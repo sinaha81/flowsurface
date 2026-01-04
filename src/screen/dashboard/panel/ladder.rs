@@ -161,6 +161,7 @@ impl Ladder {
         self.invalidate(Some(Instant::now()));
     }
 
+
     pub fn set_show_chase_tracker(&mut self, enabled: bool) {
         if self.config.show_chase_tracker != enabled {
             self.config.show_chase_tracker = enabled;

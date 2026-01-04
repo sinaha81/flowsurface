@@ -173,6 +173,11 @@ impl From<&pane::State> for data::Pane {
                     link_group: pane.link_group,
                 }
             }
+            pane::Content::VolumeProfile(_) => data::Pane::VolumeProfile {
+                stream_type: streams,
+                settings: pane.settings.clone(),
+                link_group: pane.link_group,
+            },
         }
     }
 }
@@ -276,6 +281,20 @@ pub fn configuration(pane: data::Pane) -> Configuration<pane::State> {
             link_group,
         } => {
             let content = pane::Content::Ladder(None);
+
+            Configuration::Pane(pane::State::from_config(
+                content,
+                stream_type,
+                settings,
+                link_group,
+            ))
+        }
+        data::Pane::VolumeProfile {
+            stream_type,
+            settings,
+            link_group,
+        } => {
+            let content = pane::Content::VolumeProfile(None);
 
             Configuration::Pane(pane::State::from_config(
                 content,

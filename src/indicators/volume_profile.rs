@@ -139,7 +139,7 @@ impl VolumeProfile {
 impl Indicator for VolumeProfile {
     fn new(config: IndicatorConfig) -> Self {
         let mut session_mode = SessionMode::Daily;
-        let mut va_pct = 70.0;
+        let mut va_pct = 68.0;
         let mut width_pct = 30.0;
         let mut placement_right = true;
         let mut poc_color = Color::from_rgb(1.0, 0.0, 0.0);
@@ -301,12 +301,11 @@ impl Indicator for VolumeProfile {
 
             for (&price, &vol) in &session.bins {
                 let y = get_y(price);
-                // Simple optimization: only render if in viewport Y
-                // But Indicators are usually full-height or context provides bounds.
-                // ctx.bounds is the sub-chart bounds.
                 
                 let bin_width = (vol / max_vol) * hist_max_width;
                 let bin_height = ctx.cell_height;
+                // Ensure minimal height for visibility
+                let bin_height = bin_height.max(1.0);  
                 
                 let rect_x = if self.placement_right {
                     s_end_x - bin_width
@@ -329,6 +328,38 @@ impl Indicator for VolumeProfile {
                     iced::Size::new(bin_width, bin_height),
                     color
                 );
+            }
+            
+            // Render Lines (VAH, VAL, POC)
+            let line_width = s_end_x - s_start_x;
+            if line_width > 0.0 {
+                // VAH
+                 if let Some(vah) = session.vah {
+                    let y = get_y(vah);
+                    ctx.frame.fill_rectangle(
+                        Point::new(s_start_x, y - 1.0),
+                        iced::Size::new(line_width, 2.0),
+                        Color::BLACK
+                    );
+                }
+                // VAL
+                if let Some(val) = session.val {
+                    let y = get_y(val);
+                    ctx.frame.fill_rectangle(
+                        Point::new(s_start_x, y - 1.0),
+                        iced::Size::new(line_width, 2.0),
+                        Color::BLACK
+                    );
+                }
+                // POC
+                if let Some(poc) = session.poc {
+                    let y = get_y(poc);
+                    ctx.frame.fill_rectangle(
+                        Point::new(s_start_x, y - 1.5),
+                        iced::Size::new(line_width, 3.0),
+                        Color::from_rgb(1.0, 0.65, 0.0) // Orange
+                    );
+                }
             }
         }
     }

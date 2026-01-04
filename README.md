@@ -7,11 +7,14 @@
 [![Made with iced](https://iced.rs/badge.svg)](https://github.com/iced-rs/iced)
 
 An experimental open-source desktop charting application. Supports Binance, Bybit, Hyperliquid and OKX
-<p align="center">
-  <img src="https://github.com/sinaha81/flowsurface/blob/main/image.png">
-</p>
 
-
+<div align="center">
+  <img
+    src="https://github.com/user-attachments/assets/baddc444-e079-48e5-82b2-4f97094eba07"
+    alt="Flowsurface screenshot"
+    style="max-width: 100%; height: auto;"
+  />
+</div>
 
 ### Key Features
 

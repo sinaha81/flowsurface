@@ -205,14 +205,14 @@ impl Dashboard {
                 Some(id) => {
                     if let Some(state) = self.get_mut_pane_state_by_uuid(main_window.id, id) {
                         state.status = pane::Status::Ready;
-                        state.notifications.push(Toast::error(err.to_string()));
+                        // Suppress toast, log instead
+                        log::error!("Pane error ({}): {}", id, err);
                     }
                 }
                 _ => {
-                    return (
-                        Task::done(Message::Notification(Toast::error(err.to_string()))),
-                        None,
-                    );
+                    // Suppress toast, log instead
+                    log::error!("Dashboard error: {}", err);
+                    return (Task::none(), None);
                 }
             },
             Message::Pane(window, message) => match message {
@@ -291,6 +291,9 @@ impl Dashboard {
                                             ) | (
                                                 data::layout::pane::VisualConfig::Comparison(_),
                                                 pane::Content::Comparison(_)
+                                            ) | (
+                                                data::layout::pane::VisualConfig::VolumeProfile(_),
+                                                pane::Content::VolumeProfile(_)
                                             )
                                         ),
                                     };
@@ -681,11 +684,15 @@ impl Dashboard {
             Some(id) => {
                 if let Some(state) = self.get_mut_pane_state_by_uuid(main_window, id) {
                     state.status = pane::Status::Ready;
-                    state.notifications.push(Toast::error(err.to_string()));
+                    // Suppress toast, log instead
+                    log::error!("Pane error ({}): {}", id, err);
                 }
                 Task::none()
             }
-            _ => Task::done(Message::Notification(Toast::error(err.to_string()))),
+            _ => {
+                 log::error!("Dashboard error: {}", err);
+                 Task::none()
+            }
         }
     }
 
@@ -954,6 +961,9 @@ impl Dashboard {
                         pane::Content::Comparison(Some(c)) => {
                             c.update_latest_kline(&stream.ticker_info(), kline);
                         }
+                        pane::Content::VolumeProfile(Some(p)) => {
+                            p.update_data(&[], &[kline.clone()]);
+                        }
                         _ => {}
                     }
                     found_match = true;
@@ -1002,6 +1012,9 @@ impl Dashboard {
                                 panel.insert_buffers(depth_update_t, depth, trades_buffer);
                             }
                         }
+                        pane::Content::VolumeProfile(Some(p)) => {
+                            p.update_data(trades_buffer, &[]);
+                        }
                         _ => {
                             log::error!("No chart found for the stream: {stream:?}");
                         }
@@ -1034,7 +1047,7 @@ impl Dashboard {
                 Some(pane::Action::Chart(action)) => match action {
                     chart::Action::ErrorOccurred(err) => {
                         state.status = pane::Status::Ready;
-                        state.notifications.push(Toast::error(err.to_string()));
+                        log::error!("Chart error: {}", err);
                     }
                     chart::Action::RequestFetch(reqs) => {
                         tasks.push(request_fetch_many(

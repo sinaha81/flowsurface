@@ -21,6 +21,7 @@ use widget::{
     confirm_dialog_container,
     toast::{self, Toast},
     tooltip,
+    console::{self, Console},
 };
 
 use iced::{
@@ -71,6 +72,9 @@ struct Flowsurface {
     proxy_host_input: String,
     proxy_port_input: String,
     proxy_protocol_input: exchange::ProxyProtocol,
+    // Console
+    show_console: bool,
+    console: Console,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -120,6 +124,8 @@ enum Message {
     ProxyHostInputChanged(String),
     ProxyPortInputChanged(String),
     ProxyProtocolInputChanged(exchange::ProxyProtocol),
+    // Console
+    Console(console::Message),
 }
 
 impl Flowsurface {
@@ -171,6 +177,8 @@ impl Flowsurface {
             proxy_host_input,
             proxy_port_input,
             proxy_protocol_input,
+            show_console: false,
+            console: Console::new(),
         };
 
         let active_layout_id = state.layout_manager.active_layout_id().unwrap_or(
@@ -520,6 +528,14 @@ impl Flowsurface {
                 }
             }
             Message::Sidebar(message) => {
+                if let dashboard::sidebar::Message::ToggleConsole = message {
+                     self.show_console = !self.show_console;
+                     if self.show_console {
+                         self.console.sync_logs();
+                     }
+                     return Task::none();
+                }
+
                 let (task, action) = self.sidebar.update(message);
 
                 match action {
@@ -545,7 +561,8 @@ impl Flowsurface {
                         });
                     }
                     Some(dashboard::sidebar::Action::ErrorOccurred(err)) => {
-                        self.notifications.push(Toast::error(err.to_string()));
+                        // Suppress toast, just log it. The console will show it.
+                        log::error!("Sidebar error: {}", err);
                     }
                     None => {}
                 }
@@ -604,6 +621,19 @@ impl Flowsurface {
             Message::ProxyProtocolInputChanged(proto) => {
                 self.proxy_protocol_input = proto;
             }
+
+
+            Message::Console(msg) => {
+                match &msg {
+                    console::Message::Copy(text) => {
+                         return iced::clipboard::write(text.clone());
+                    }
+                    _ => {}
+                }
+                self.console.update(msg);
+                // If it's a FilterChanged or Tick, we might want to sync
+                self.console.sync_logs();
+            }
         }
         Task::none()
     }
@@ -656,7 +686,7 @@ impl Flowsurface {
             .padding(padding::left(8).right(8).top(4))
             .align_y(Alignment::Center);
 
-            let base = column![
+            let mut base = column![
                 top_bar,
                 match sidebar_pos {
                     sidebar::Position::Left => row![sidebar_view, dashboard_view,],
@@ -665,6 +695,15 @@ impl Flowsurface {
                 .spacing(4)
                 .padding(8),
             ];
+
+            if self.show_console {
+                base = base.push(
+                    container(self.console.view().map(Message::Console))
+                        .height(iced::Length::Fixed(200.0))
+                        .padding(8)
+                        .style(iced::widget::container::bordered_box)
+                );
+            }
 
             if let Some(menu) = self.sidebar.active_menu() {
                 self.view_with_modal(base.into(), dashboard, menu)

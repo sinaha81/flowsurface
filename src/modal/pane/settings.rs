@@ -323,12 +323,13 @@ pub fn heatmap_cfg_view<'a>(
 pub fn timesales_cfg_view<'a>(
     cfg: timeandsales::Config,
     pane: pane_grid::Pane,
+    state: &'a State,
 ) -> Element<'a, PaneMessage> {
     let trade_size_column = {
         let filter = cfg.trade_size_filter;
         let slider = labeled_slider(
             "Trade",
-            0.0..=1_000_000_000.0, // Uncapped: increased to 1B
+            0.0..=1_000_000_000.0,
             filter,
             move |value| {
                 PaneMessage::VisualConfigChanged(
@@ -344,7 +345,21 @@ pub fn timesales_cfg_view<'a>(
             Some(500.0),
         );
 
-        column![text("Size filter").size(14), slider].spacing(8)
+        let input = numeric_input_box(
+            "Min Size",
+            "0",
+            &state.trade_size_input,
+            state.trade_size_input.parse::<f64>().is_ok(),
+            move |s| {
+                PaneMessage::PaneEvent(
+                    pane,
+                    Event::SettingsInteraction(self::Message::TradeSizeInputChanged(s)),
+                )
+            },
+            None,
+        );
+
+        column![text("Size filter").size(14), slider, input].spacing(8)
     };
 
     let retention_minutes = (cfg.trade_retention.as_secs_f32() / 60.0).max(1.0);
@@ -668,6 +683,82 @@ pub fn ladder_cfg_view<'a>(cfg: ladder::Config, pane: pane_grid::Pane) -> Elemen
         row![
             space::horizontal(),
             sync_all_button(pane, VisualConfig::Ladder(cfg))
+        ],
+        ; spacing = 12, align_x = Alignment::Start
+    ];
+
+    cfg_view_container(320, content)
+}
+
+pub fn volumeprofile_cfg_view<'a>(
+    cfg: data::panel::volume_profile::Config,
+    pane: pane_grid::Pane,
+) -> Element<'a, PaneMessage> {
+    let period_selection = {
+        let picklist = pick_list(
+            data::panel::volume_profile::Period::ALL,
+            Some(cfg.period),
+            move |new_period| {
+                PaneMessage::VisualConfigChanged(
+                    pane,
+                    VisualConfig::VolumeProfile(data::panel::volume_profile::Config {
+                        period: new_period,
+                        ..cfg
+                    }),
+                    false,
+                )
+            },
+        );
+
+        column![text("Period").size(14), picklist].spacing(8)
+    };
+
+    let value_area_slider = {
+        labeled_slider(
+            "Value Area %",
+            0.0..=100.0,
+            cfg.value_area_pct,
+            move |value| {
+                PaneMessage::VisualConfigChanged(
+                    pane,
+                    VisualConfig::VolumeProfile(data::panel::volume_profile::Config {
+                        value_area_pct: value,
+                        ..cfg
+                    }),
+                    false,
+                )
+            },
+            |value| format!("{:.0}%", value),
+            Some(68.0),
+        )
+    };
+
+    let row_height_slider = {
+        labeled_slider(
+            "Row Height",
+            4.0..=60.0,
+            cfg.row_height,
+            move |value| {
+                PaneMessage::VisualConfigChanged(
+                    pane,
+                    VisualConfig::VolumeProfile(data::panel::volume_profile::Config {
+                        row_height: value,
+                        ..cfg
+                    }),
+                    false,
+                )
+            },
+            |value| format!("{:.0}px", value),
+            Some(20.0),
+        )
+    };
+
+    let content = split_column![
+        period_selection,
+        column![text("Style").size(14), value_area_slider, row_height_slider].spacing(8),
+        row![
+            space::horizontal(),
+            sync_all_button(pane, VisualConfig::VolumeProfile(cfg))
         ],
         ; spacing = 12, align_x = Alignment::Start
     ];
